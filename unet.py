@@ -1,13 +1,16 @@
 from keras.models import Sequential
-from keras import layers
-from keras import models
+from keras import layers, models
 from keras.layers import BatchNormalization, Conv2D, UpSampling2D, MaxPooling2D, Dropout
-from keras.optimizers import Adam,SGD
-from keras import regularizers
+from keras.optimizers import Adam
 import numpy as np
-import pickle
+import tensorflow as tf
 
-def get_unet():
+## Not currently used
+
+#from keras.optimizers import Adam,SGD
+#import pickle
+
+def get_unet( num_gpu  ):
     concat_axis = 3
     inputs = layers.Input(shape = (80, 120, 3))
 
@@ -69,17 +72,23 @@ def get_unet():
     bn18 = BatchNormalization(axis=3)(conv9)
 
     conv10 = layers.Conv2D(1, (1, 1))(bn18)
-    #bn19 = BatchNormalization(axis=3)(conv10)
 
-    model = models.Model(inputs=inputs, outputs=conv10)
+    if ( num_gpu <= 1 ):
+       model = models.Model(inputs=inputs, outputs=conv10)
+    else:
+       with tf.device("/cpu:0"):
+            model = models.Model(inputs=inputs, outputs=conv10)
+       model = multi_gpu_model( model, gpus=num_gpu )
 
     sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
     model.compile(loss='mae', optimizer=sgd, metrics=['mse'])
     #model.compile(loss='mae', optimizer=Adam(lr=0.001), metrics=['mse'])
-    print model.summary()
+    #print model.summary()
 
     return model
 
+## Set number of GPUs to be used below
+num_gpus = 4
 
 #x = np.load("/datasets/1980-2016/z_1980_2016.npy")
 x = np.load("/datasets/10zlevels.npy")
@@ -103,9 +112,11 @@ k = 6
 x_train = x[:40000, :, :, [i,j,k]]
 x_test = x[40000:, :, :, [i,j,k]]
 
-model = get_unet()
-history = model.fit(x_train, y_train, epochs=50, verbose=1, validation_data=(x_test, y_test))
-with open('trainHistoryDict_unet1_{}-{}-{}'.format(i, j, k), 'wb') as file_pi:
-    pickle.dump(history.history, file_pi)
+model = get_unet( num_gpus )
+history = model.fit(x_train, y_train, batch_size=64*num_gpus, epochs=50, verbose=1, validation_data=(x_test, y_test))
 
-model.save('/datasets/unet1_{}-{}-{}_.h5')
+# Commented out for benchmarking purposes
+#with open('trainHistoryDict_unet1_{}-{}-{}'.format(i, j, k), 'wb') as file_pi:
+#    pickle.dump(history.history, file_pi)
+
+#model.save('/datasets/unet1_{}-{}-{}_.h5')
