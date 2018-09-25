@@ -1,14 +1,29 @@
-from keras.models import Sequential
-from keras import layers, models
-from keras.layers import BatchNormalization, Conv2D, UpSampling2D, MaxPooling2D, Dropout
-from keras.optimizers import Adam
 import numpy as np
 import tensorflow as tf
 
+from keras.models import Sequential
+from keras import layers, models
+from keras.layers import BatchNormalization, Conv2D, UpSampling2D, MaxPooling2D, Dropout
+from keras.optimizers import SGD
+from keras.utils.training_utils import multi_gpu_model
+
 ## Not currently used
 
-#from keras.optimizers import Adam,SGD
+#from keras.optimizers import Adam
 #import pickle
+
+##
+## Set some important parameters
+##
+
+num_training_images = 40000
+num_gpus = 4
+batch_size = 10 # if using float16 precision, if using float32 precision, set it to 64
+epochs = 50
+
+##
+## Define a subroutine that contructs the required neural network
+##
 
 def get_unet( num_gpu  ):
     concat_axis = 3
@@ -87,13 +102,14 @@ def get_unet( num_gpu  ):
 
     return model
 
-## Set number of GPUs to be used below
-num_gpus = 4
+## 
+## Load the input data set and then randomly shuffle the order of the input images
+##
 
-#x = np.load("/datasets/1980-2016/z_1980_2016.npy")
-x = np.load("/datasets/10zlevels.npy")
-y = 1000*np.expand_dims(np.load("/datasets/1980-2016/full_tp_1980_2016.npy"), axis=3)
+x = np.load("datasets/10zlevels.npy")
+y = 1000*np.expand_dims(np.load("datasets/full_tp_1980_2016.npy"), axis=3)
 
+#print( "total # of input images: ", x.shape[0] )
 idxs = np.arange(x.shape[0])
 np.random.seed(0)
 np.random.shuffle(idxs)
@@ -101,19 +117,26 @@ np.random.shuffle(idxs)
 x = x[idxs, :, :, :]
 y = y[idxs, :]
 
-y_train = y[:40000, :]
-y_test = y[40000:, :]
+##
+## Divide the input dataset into training and testing sets
+##
+
+y_train = y[:num_training_images, :]
+y_test = y[num_training_images:54000, :]
 
 # Levels [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100]
 
-i = 0
-j = 2
-k = 6
-x_train = x[:40000, :, :, [i,j,k]]
-x_test = x[40000:, :, :, [i,j,k]]
+x_train = x[:num_training_images, :, :, [0,2,6]]
+x_test = x[num_training_images:54000, :, :, [0,2,6]]
+
+##
+## Construct the neural network and start training
+##
 
 model = get_unet( num_gpus )
-history = model.fit(x_train, y_train, batch_size=64*num_gpus, epochs=50, verbose=1, validation_data=(x_test, y_test))
+
+batch_size = num_gpus*batch_size 
+history = model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1, validation_data=(x_test, y_test))
 
 # Commented out for benchmarking purposes
 #with open('trainHistoryDict_unet1_{}-{}-{}'.format(i, j, k), 'wb') as file_pi:
