@@ -1,31 +1,60 @@
 import numpy as np
 import tensorflow as tf
+import argparse
 
 from keras.models import Sequential
 from keras import layers, models
 from keras.layers import BatchNormalization, Conv2D, UpSampling2D, MaxPooling2D, Dropout
-from keras.optimizers import SGD
+from keras.optimizers import Adam 
 from keras.utils.training_utils import multi_gpu_model
 
 ## Not currently used
 
-#from keras.optimizers import Adam
+#from keras.optimizers import SGD
 #import pickle
 
 ##
-## Set some important parameters
+## Set some important parameters and their default values
 ##
 
 num_training_images = 40000
 num_gpus = 4
-batch_size = 10 # if using float16 precision, if using float32 precision, set it to 64
-epochs = 50
+batch_size = 20 # if using float16 precision, if using float32 precision, set it to 64
+epochs = 20
+learn_rate=0.001
+
+##
+## Look for any user specified commandline arguments
+##
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-g', '--num_gpus', type=int, action='store', dest='num_gpus', help="number of GPUs to be used")
+parser.add_argument('-e', '--epochs', type=int, action='store', dest='epochs', help="set number of epochs")
+parser.add_argument('-b', '--batch_size', type=int, action='store', dest='batch_size', help="set batch size")
+parser.add_argument('-l', '--learn_rate', type=float, action='store', dest='learn_rate', help="set learning rate for optimizer")
+args = parser.parse_args()
+
+if args.num_gpus is not None:
+   if args.num_gpus > 0 and args.num_gpus < 5:
+      num_gpus = args.num_gpus
+
+if args.epochs is not None:
+   if args.epochs > 0:
+      epochs = args.epochs
+
+if args.batch_size is not None:
+   if args.batch_size > 0:
+      batch_size = args.batch_size 
+
+if args.learn_rate is not None:
+   if args.learn_rate > 0.0:
+      learn_rate = args.learn_rate
 
 ##
 ## Define a subroutine that contructs the required neural network
 ##
 
-def get_unet( num_gpu  ):
+def get_unet( num_gpu, learn_rate  ):
     concat_axis = 3
     inputs = layers.Input(shape = (80, 120, 3))
 
@@ -95,9 +124,9 @@ def get_unet( num_gpu  ):
             model = models.Model(inputs=inputs, outputs=conv10)
        model = multi_gpu_model( model, gpus=num_gpu )
 
-    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-    model.compile(loss='mae', optimizer=sgd, metrics=['mse'])
-    #model.compile(loss='mae', optimizer=Adam(lr=0.001), metrics=['mse'])
+#    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+#    model.compile(loss='mae', optimizer=sgd, metrics=['mse'])
+    model.compile(loss='mae', optimizer=Adam(lr=learn_rate), metrics=['mse'])
     #print model.summary()
 
     return model
@@ -133,10 +162,10 @@ x_test = x[num_training_images:54000, :, :, [0,2,6]]
 ## Construct the neural network and start training
 ##
 
-model = get_unet( num_gpus )
+model = get_unet( num_gpus, learn_rate )
 
 batch_size = num_gpus*batch_size 
-history = model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=1, validation_data=(x_test, y_test))
+history = model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=2, validation_data=(x_test, y_test))
 
 # Commented out for benchmarking purposes
 #with open('trainHistoryDict_unet1_{}-{}-{}'.format(i, j, k), 'wb') as file_pi:
