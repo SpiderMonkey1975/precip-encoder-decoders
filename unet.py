@@ -2,53 +2,50 @@ import numpy as np
 import tensorflow as tf
 import argparse
 
-from keras.models import Sequential
-from keras import layers, models
-from keras.layers import BatchNormalization, Conv2D, UpSampling2D, MaxPooling2D, Dropout
-from keras.optimizers import Adam 
-from keras.utils.training_utils import multi_gpu_model
+from tensorflow.keras import layers, models
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import BatchNormalization, Conv2D, UpSampling2D, MaxPooling2D, Dropout
+from tensorflow.keras.optimizers import SGD, Adam 
+from tensorflow.keras.utils import multi_gpu_model
 
-## Not currently used
-
-#from keras.optimizers import SGD
-#import pickle
+print(" ")
+print(" ")
+print("*================================================*")
+print("*   RAINFALL AUTO-ENCODER / DECODER PREDICTOR    *")
+print("*================================================*")
 
 ##
-## Set some important parameters and their default values
+## Set the number of images used for training, verification and testing
 ##
 
 num_training_images = 40000
-num_gpus = 4
-batch_size = 20 # if using float16 precision, if using float32 precision, set it to 64
-epochs = 20
-learn_rate=0.001
+num_verification_images = 13000
+num_testing_images = 1000
 
 ##
 ## Look for any user specified commandline arguments
 ##
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-g', '--num_gpus', type=int, action='store', dest='num_gpus', help="number of GPUs to be used")
-parser.add_argument('-e', '--epochs', type=int, action='store', dest='epochs', help="set number of epochs")
-parser.add_argument('-b', '--batch_size', type=int, action='store', dest='batch_size', help="set batch size")
-parser.add_argument('-l', '--learn_rate', type=float, action='store', dest='learn_rate', help="set learning rate for optimizer")
+parser.add_argument('-g', '--num_gpus', type=int, default=1, help="number of GPUs to be used")
+parser.add_argument('-e', '--epochs', type=int, default=1, help="number of epochs")
+parser.add_argument('-b', '--batch_size', type=int, default=100, help="set batch sizei for a single GPU")
+parser.add_argument('-l', '--learn_rate', type=float, default=0.001, help="set learning rate for optimizer")
 args = parser.parse_args()
 
-if args.num_gpus is not None:
-   if args.num_gpus > 0 and args.num_gpus < 5:
-      num_gpus = args.num_gpus
+print(" ")
+print(" ")
+print("             Hyper-Parameter Settings")
+print("*------------------------------------------------*")
+print("  ", args.epochs, "epochs used in training")
+print("  batch size of ", args.batch_size, "images used")
+print("  ADAM optimizer used a learning rate of ", args.learn_rate)
 
-if args.epochs is not None:
-   if args.epochs > 0:
-      epochs = args.epochs
-
-if args.batch_size is not None:
-   if args.batch_size > 0:
-      batch_size = args.batch_size 
-
-if args.learn_rate is not None:
-   if args.learn_rate > 0.0:
-      learn_rate = args.learn_rate
+print(" ")
+print(" ")
+print("                Model Parallelism")
+print("*------------------------------------------------*")
+print("  ", args.num_gpus, "GPUs used")
 
 ##
 ## Define a subroutine that contructs the required neural network
@@ -127,7 +124,6 @@ def get_unet( num_gpu, learn_rate  ):
 #    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
 #    model.compile(loss='mae', optimizer=sgd, metrics=['mse'])
     model.compile(loss='mae', optimizer=Adam(lr=learn_rate), metrics=['mse'])
-    #print model.summary()
 
     return model
 
@@ -146,29 +142,56 @@ np.random.shuffle(idxs)
 x = x[idxs, :, :, :]
 y = y[idxs, :]
 
-##
-## Divide the input dataset into training and testing sets
-##
 
-y_train = y[:num_training_images, :]
-y_test = y[num_training_images:54000, :]
-
-# Levels [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100]
+##
+## Divide the input dataset into training, verification  and testing sets
+##
 
 x_train = x[:num_training_images, :, :, [0,2,6]]
-x_test = x[num_training_images:54000, :, :, [0,2,6]]
+y_train = y[:num_training_images, :]
+
+n = num_training_images + num_verification_images
+x_verify = x[num_training_images+1:n+1, :, :, [0,2,6]]
+y_verify = y[num_training_images+1:n+1, :]
+
+n2 = n + num_testing_images + 1
+x_test = x[n:n2, :, :, [0,2,6]]
+y_test = y[n:n2, :]
+
 
 ##
-## Construct the neural network and start training
+## Construct the neural network
 ##
 
-model = get_unet( num_gpus, learn_rate )
+model = get_unet( args.num_gpus, args.learn_rate )
 
-batch_size = num_gpus*batch_size 
-history = model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, verbose=2, validation_data=(x_test, y_test))
 
-# Commented out for benchmarking purposes
-#with open('trainHistoryDict_unet1_{}-{}-{}'.format(i, j, k), 'wb') as file_pi:
-#    pickle.dump(history.history, file_pi)
+##
+## Train model.  Only output information for the validation steps only.
+##
 
-#model.save('/datasets/unet1_{}-{}-{}_.h5')
+print(" ")
+print(" ")
+print("             Model Training Output")
+print("*------------------------------------------------*")
+history = model.fit( x_train, y_train, 
+                     batch_size=args.batch_size*args.num_gpus, 
+                     epochs=args.epochs, 
+                     verbose=2, 
+                     validation_data=(x_verify, y_verify) )
+
+##
+## End by sending test data through the trained model
+##
+
+score = model.evaluate( x=x_test, y=y_test, 
+                        batch_size=args.batch_size*args.num_gpus,
+                        verbose=0 )
+
+print(" ")
+print(" ")
+print("             Model Prediction Test")
+print("*------------------------------------------------*")
+print("  Test on %s samples, %4.1f percent accuracy" % (num_testing_images,score[1] * 100.0))
+#print('  observed accuracy was ', score[1] * 100.0)
+print(" ")
