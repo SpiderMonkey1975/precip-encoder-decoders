@@ -8,6 +8,7 @@ from tensorflow.keras.layers import BatchNormalization, Conv2D, UpSampling2D, Ma
 from tensorflow.keras.optimizers import Adam 
 from tensorflow.keras.utils import multi_gpu_model
 from tensorflow.keras.regularizers import l1_l2
+from tensorflow.keras.callbacks import LearningRateScheduler
 
 print(" ")
 print(" ")
@@ -30,10 +31,13 @@ num_testing_images = 1000
 parser = argparse.ArgumentParser()
 parser.add_argument('-g', '--num_gpus', type=int, default=1, help="number of GPUs to be used")
 parser.add_argument('-e', '--epochs', type=int, default=1, help="number of epochs")
+parser.add_argument('-w', '--warmup_epochs', type=int, default=0, help="number of warm-up epochs")
 parser.add_argument('-b', '--batch_size', type=int, default=2048, help="set batch size for a single GPU")
 parser.add_argument('-l', '--learn_rate', type=float, default=0.001, help="set learning rate for optimizer")
 parser.add_argument('-r', '--l2_reg', type=float, default=0.00022, help="set L2 regularization parameter")
 args = parser.parse_args()
+
+learn_rate = args.learn_rate * 0.25 * np.sqrt(args.num_gpus)
 
 print(" ")
 print(" ")
@@ -129,6 +133,27 @@ def get_unet( num_gpu, learn_rate, l2_param  ):
 
     return model
 
+##
+## Define a subroutine that defines the learning rate for the optimizer.  We linearly
+## scale the learning rate by number of epochs performed.
+##
+## Provided by Alessandro Rigazzi, Cray
+##
+
+def set_learning_rate( epoch ):
+  total_epochs = args.epochs
+  initial_lr = learn_rate
+  if epoch<args.warmup_epochs:
+    if epoch < 1:
+      epoch = 1
+    return initial_lr/args.warmup_epochs * epoch
+  else:
+    epochs_to_end = total_epochs-epoch
+    if epochs_to_end < 1:
+      epochs_to_end = 1
+    return initial_lr/(total_epochs-args.warmup_epochs)*epochs_to_end
+
+
 ## 
 ## Load the input data set and then randomly shuffle the order of the input images
 ##
@@ -165,7 +190,7 @@ y_test = y[n:n2, :]
 ## Construct the neural network
 ##
 
-model = get_unet( args.num_gpus, args.learn_rate, args.l2_reg )
+model = get_unet( args.num_gpus, learn_rate, args.l2_reg )
 
 
 ##
@@ -176,18 +201,23 @@ print(" ")
 print(" ")
 print("             Model Training Output")
 print("*------------------------------------------------*")
+
+lrate = LearningRateScheduler(set_learning_rate)
+my_callbacks = [lrate]
+
 history = model.fit( x_train, y_train, 
-                     batch_size=args.batch_size*args.num_gpus, 
+                     batch_size=args.batch_size, 
                      epochs=args.epochs, 
                      verbose=2, 
-                     validation_data=(x_verify, y_verify) )
+                     validation_data=(x_verify, y_verify),
+                     callbacks=my_callbacks )
 
 ##
 ## End by sending test data through the trained model
 ##
 
 score = model.evaluate( x=x_test, y=y_test, 
-                        batch_size=args.batch_size*args.num_gpus,
+                        batch_size=args.batch_size,
                         verbose=0 )
 
 print(" ")
@@ -195,5 +225,4 @@ print(" ")
 print("             Model Prediction Test")
 print("*------------------------------------------------*")
 print("  Test on %s samples, %4.1f percent accuracy" % (num_testing_images,score[1] * 100.0))
-#print('  observed accuracy was ', score[1] * 100.0)
 print(" ")
