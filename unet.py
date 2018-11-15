@@ -37,7 +37,7 @@ parser.add_argument('-l', '--learn_rate', type=float, default=0.001, help="set l
 parser.add_argument('-r', '--l2_reg', type=float, default=0.00022, help="set L2 regularization parameter")
 args = parser.parse_args()
 
-learn_rate = args.learn_rate * 0.25 * np.sqrt(args.num_gpus)
+learn_rate = args.learn_rate #* 0.25 * np.sqrt(args.num_gpus)
 
 print(" ")
 print(" ")
@@ -45,7 +45,7 @@ print("             Hyper-Parameter Settings")
 print("*------------------------------------------------*")
 print("  ", args.epochs, "epochs used in training")
 print("  batch size of ", args.batch_size, "images used")
-print("  ADAM optimizer used a learning rate of ", args.learn_rate)
+print("  ADAM optimizer used a learning rate of", learn_rate)
 print("  L2 regularization parameter set to ", args.l2_reg)
 print(" ")
 print(" ")
@@ -54,84 +54,94 @@ print("*------------------------------------------------*")
 print("  ", args.num_gpus, "GPUs used")
 
 ##
-## Define a subroutine that contructs the required neural network
+## Contruct the neural network
 ##
 
-def get_unet( num_gpu, learn_rate, l2_param  ):
-    concat_axis = 3
-    inputs = layers.Input(shape = (80, 120, 3))
+concat_axis = 3
+inputs = layers.Input(shape = (80, 120, 3))
 
-    conv_kernel_reg = l1_l2(l1=0.0, l2=l2_param)
+#conv_kernel_reg = l1_l2(l1=0.0, l2=args.l2_reg)
+conv_kernel_reg = None
 
-    bn0 = BatchNormalization(axis=3)(inputs)
-    conv1 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn0)
-    bn1 = BatchNormalization(axis=3)(conv1)
-    conv1 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn1)
-    bn2 = BatchNormalization(axis=3)(conv1)
-    pool1 = layers.MaxPooling2D(pool_size=(2, 2))(bn2)
-    conv2 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(pool1)
-    bn3 = BatchNormalization(axis=3)(conv2)
-    conv2 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn3)
-    bn4 = BatchNormalization(axis=3)(conv2)
-    pool2 = layers.MaxPooling2D(pool_size=(2, 2))(bn4)
+bn0 = BatchNormalization(axis=3)(inputs)
+conv1 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn0)
+bn1 = BatchNormalization(axis=3)(conv1)
+conv1 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn1)
+bn2 = BatchNormalization(axis=3)(conv1)
+pool1 = layers.MaxPooling2D(pool_size=(2, 2))(bn2)
+conv2 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(pool1)
+bn3 = BatchNormalization(axis=3)(conv2)
+conv2 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn3)
+bn4 = BatchNormalization(axis=3)(conv2)
+pool2 = layers.MaxPooling2D(pool_size=(2, 2))(bn4)
 
-    conv3 = layers.Conv2D(128, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(pool2)
-    bn5 = BatchNormalization(axis=3)(conv3)
-    conv3 = layers.Conv2D(128, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn5)
-    bn6 = BatchNormalization(axis=3)(conv3)
-    pool3 = layers.MaxPooling2D(pool_size=(2, 2))(bn6)
+conv3 = layers.Conv2D(128, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(pool2)
+bn5 = BatchNormalization(axis=3)(conv3)
+conv3 = layers.Conv2D(128, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn5)
+bn6 = BatchNormalization(axis=3)(conv3)
+pool3 = layers.MaxPooling2D(pool_size=(2, 2))(bn6)
 
-    conv4 = layers.Conv2D(256, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(pool3)
-    bn7 = BatchNormalization(axis=3)(conv4)
-    conv4 = layers.Conv2D(256, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn7)
-    bn8 = BatchNormalization(axis=3)(conv4)
-    pool4 = layers.MaxPooling2D(pool_size=(2, 3))(bn8)
+conv4 = layers.Conv2D(256, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(pool3)
+bn7 = BatchNormalization(axis=3)(conv4)
+conv4 = layers.Conv2D(256, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn7)
+bn8 = BatchNormalization(axis=3)(conv4)
+pool4 = layers.MaxPooling2D(pool_size=(2, 3))(bn8)
 
-    conv5 = layers.Conv2D(512, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(pool4)
-    bn9 = BatchNormalization(axis=3)(conv5)
-    conv5 = layers.Conv2D(512, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn9)
-    bn10 = BatchNormalization(axis=3)(conv5)
+conv5 = layers.Conv2D(512, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(pool4)
+bn9 = BatchNormalization(axis=3)(conv5)
+conv5 = layers.Conv2D(512, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn9)
+bn10 = BatchNormalization(axis=3)(conv5)
 
-    up_conv5 = layers.UpSampling2D(size=(2, 3))(bn10)
-    up6 = layers.concatenate([up_conv5, conv4], axis=concat_axis)
-    conv6 = layers.Conv2D(256, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(up6)
-    bn11 = BatchNormalization(axis=3)(conv6)
-    conv6 = layers.Conv2D(256, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn11)
-    bn12 = BatchNormalization(axis=3)(conv6)
+up_conv5 = layers.UpSampling2D(size=(2, 3))(bn10)
+up6 = layers.concatenate([up_conv5, conv4], axis=concat_axis)
+conv6 = layers.Conv2D(256, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(up6)
+bn11 = BatchNormalization(axis=3)(conv6)
+conv6 = layers.Conv2D(256, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn11)
+bn12 = BatchNormalization(axis=3)(conv6)
 
-    up_conv6 = layers.UpSampling2D(size=(2, 2))(bn12)
-    up7 = layers.concatenate([up_conv6, conv3], axis=concat_axis)
-    conv7 = layers.Conv2D(128, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(up7)
-    bn13 = BatchNormalization(axis=3)(conv7)
-    conv7 = layers.Conv2D(128, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn13)
-    bn14 = BatchNormalization(axis=3)(conv7)
+up_conv6 = layers.UpSampling2D(size=(2, 2))(bn12)
+up7 = layers.concatenate([up_conv6, conv3], axis=concat_axis)
+conv7 = layers.Conv2D(128, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(up7)
+bn13 = BatchNormalization(axis=3)(conv7)
+conv7 = layers.Conv2D(128, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn13)
+bn14 = BatchNormalization(axis=3)(conv7)
 
-    up_conv7 = layers.UpSampling2D(size=(2, 2))(bn14)
-    up8 = layers.concatenate([up_conv7, conv2], axis=concat_axis)
-    conv8 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(up8)
-    bn15 = BatchNormalization(axis=3)(conv8)
-    conv8 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn15)
-    bn16 = BatchNormalization(axis=3)(conv8)
+up_conv7 = layers.UpSampling2D(size=(2, 2))(bn14)
+up8 = layers.concatenate([up_conv7, conv2], axis=concat_axis)
+conv8 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(up8)
+bn15 = BatchNormalization(axis=3)(conv8)
+conv8 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn15)
+bn16 = BatchNormalization(axis=3)(conv8)
 
-    up_conv8 = layers.UpSampling2D(size=(2, 2))(bn16)
-    up9 = layers.concatenate([up_conv8, conv1], axis=concat_axis)
-    conv9 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(up9)
-    bn17 = BatchNormalization(axis=3)(conv9)
-    conv9 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn17)
-    bn18 = BatchNormalization(axis=3)(conv9)
+up_conv8 = layers.UpSampling2D(size=(2, 2))(bn16)
+up9 = layers.concatenate([up_conv8, conv1], axis=concat_axis)
+conv9 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(up9)
+bn17 = BatchNormalization(axis=3)(conv9)
+conv9 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn17)
+bn18 = BatchNormalization(axis=3)(conv9)
 
-    conv10 = layers.Conv2D(1, (1, 1), kernel_regularizer=conv_kernel_reg)(bn18)
+conv10 = layers.Conv2D(1, (1, 1), kernel_regularizer=conv_kernel_reg)(bn18)
 
-    if ( num_gpu <= 1 ):
-       model = models.Model(inputs=inputs, outputs=conv10)
-    else:
-       with tf.device("/cpu:0"):
-            model = models.Model(inputs=inputs, outputs=conv10)
-       model = multi_gpu_model( model, gpus=num_gpu )
 
-    model.compile(loss='mae', optimizer=Adam(lr=learn_rate), metrics=['mse'])
+##
+## Create separate data-parallel instances of the neural net on each GPU
+##
 
-    return model
+if ( args.num_gpus <= 1 ):
+   model = models.Model(inputs=inputs, outputs=conv10)
+else:
+   with tf.device("/cpu:0"):
+        model = models.Model(inputs=inputs, outputs=conv10)
+   model = multi_gpu_model( model, gpus=args.num_gpus )
+
+
+##
+## Set the optimizer to be used and compile model
+##
+
+opt = Adam(lr=learn_rate)
+model.compile(loss='mae', optimizer=opt, metrics=['mse'])
+
 
 ##
 ## Define a subroutine that defines the learning rate for the optimizer.  We linearly
@@ -187,13 +197,6 @@ y_test = y[n:n2, :]
 
 
 ##
-## Construct the neural network
-##
-
-model = get_unet( args.num_gpus, learn_rate, args.l2_reg )
-
-
-##
 ## Train model.  Only output information for the validation steps only.
 ##
 
@@ -206,18 +209,19 @@ lrate = LearningRateScheduler(set_learning_rate)
 my_callbacks = [lrate]
 
 history = model.fit( x_train, y_train, 
-                     batch_size=args.batch_size, 
+                     batch_size=args.batch_size*args.num_gpus, 
                      epochs=args.epochs, 
                      verbose=2, 
                      validation_data=(x_verify, y_verify),
                      callbacks=my_callbacks )
+
 
 ##
 ## End by sending test data through the trained model
 ##
 
 score = model.evaluate( x=x_test, y=y_test, 
-                        batch_size=args.batch_size,
+                        batch_size=args.batch_size*args.num_gpus,
                         verbose=0 )
 
 print(" ")
