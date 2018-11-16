@@ -2,19 +2,22 @@ import numpy as np
 import tensorflow as tf
 import argparse
 
+from datetime import datetime
+
 from tensorflow.keras import layers, models
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import BatchNormalization, Conv2D, UpSampling2D, MaxPooling2D, Dropout
-from tensorflow.keras.optimizers import Adam 
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import multi_gpu_model
 from tensorflow.keras.regularizers import l1_l2
-from tensorflow.keras.callbacks import LearningRateScheduler
+from tensorflow.keras.callbacks import LearningRateScheduler, EarlyStopping
+from tensorflow.keras import backend as K
 
 print(" ")
 print(" ")
-print("*================================================*")
-print("*   RAINFALL AUTO-ENCODER / DECODER PREDICTOR    *")
-print("*================================================*")
+print("*===========================================================================================================*")
+print("*                               RAINFALL AUTO-ENCODER / DECODER PREDICTOR                                   *")
+print("*===========================================================================================================*")
 
 ##
 ## Set the number of images used for training, verification and testing
@@ -30,28 +33,24 @@ num_testing_images = 1000
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-g', '--num_gpus', type=int, default=1, help="number of GPUs to be used")
-parser.add_argument('-e', '--epochs', type=int, default=1, help="number of epochs")
-parser.add_argument('-w', '--warmup_epochs', type=int, default=0, help="number of warm-up epochs")
-parser.add_argument('-b', '--batch_size', type=int, default=512, help="set batch size for a single GPU")
-parser.add_argument('-l', '--learn_rate', type=float, default=0.001, help="set learning rate for optimizer")
+parser.add_argument('-e', '--epochs', type=int, default=1, help="maximum number of epochs")
+parser.add_argument('-b', '--batch_size', type=int, default=512, help="set batch size per GPU")
+parser.add_argument('-l', '--learn_rate', type=float, default=0.001, help="set intial learning rate for optimizer")
 parser.add_argument('-r', '--l2_reg', type=float, default=0.00022, help="set L2 regularization parameter")
+parser.add_argument('-m', '--min_change', type=float, default=0.01, help="minimum change in MSE that ends run")
 args = parser.parse_args()
 
-learn_rate = args.learn_rate #* 0.25 * np.sqrt(args.num_gpus)
+print(" ")
+print(" ")
+print("       Starting %s run on %1d GPUS using %s precision" % (K.backend(),args.num_gpus,K.floatx()))
+print(" ")
+print("       Model Settings:")
+print("         * model will run for a maximum of %2d epochs" % (args.epochs))
+print("         * a batch size of %3d images per GPU will be employed" % (args.batch_size))
+print("         * the ADAM optimizer with a learning rate of %6.4f will be used" % (args.learn_rate))
+if args.l2_reg > 0.0001:
+   print("         * L2 regularization is enabled with L2 =", args.l2_reg)
 
-print(" ")
-print(" ")
-print("             Hyper-Parameter Settings")
-print("*------------------------------------------------*")
-print("  ", args.epochs, "epochs used in training")
-print("  batch size of ", args.batch_size, "images used")
-print("  ADAM optimizer used a learning rate of", learn_rate)
-print("  L2 regularization parameter set to ", args.l2_reg)
-print(" ")
-print(" ")
-print("                Model Parallelism")
-print("*------------------------------------------------*")
-print("  ", args.num_gpus, "GPUs used")
 
 ##
 ## Contruct the neural network
@@ -60,8 +59,10 @@ print("  ", args.num_gpus, "GPUs used")
 concat_axis = 3
 inputs = layers.Input(shape = (80, 120, 3))
 
-#conv_kernel_reg = l1_l2(l1=0.0, l2=args.l2_reg)
-conv_kernel_reg = None
+if args.l2_reg > 0.0001:
+   conv_kernel_reg = l1_l2(l1=0.0, l2=args.l2_reg)
+else:
+   conv_kernel_reg = None
 
 bn0 = BatchNormalization(axis=3)(inputs)
 conv1 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn0)
@@ -69,6 +70,7 @@ bn1 = BatchNormalization(axis=3)(conv1)
 conv1 = layers.Conv2D(32, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn1)
 bn2 = BatchNormalization(axis=3)(conv1)
 pool1 = layers.MaxPooling2D(pool_size=(2, 2))(bn2)
+
 conv2 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(pool1)
 bn3 = BatchNormalization(axis=3)(conv2)
 conv2 = layers.Conv2D(64, (3, 3), activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(bn3)
@@ -139,7 +141,7 @@ else:
 ## Set the optimizer to be used and compile model
 ##
 
-opt = Adam(lr=learn_rate)
+opt = Adam(lr=args.learn_rate)
 model.compile(loss='mae', optimizer=opt, metrics=['mse'])
 
 
@@ -152,7 +154,7 @@ model.compile(loss='mae', optimizer=opt, metrics=['mse'])
 
 def set_learning_rate( epoch ):
   total_epochs = args.epochs
-  initial_lr = learn_rate
+  initial_lr = args.learn_rate
   if epoch<args.warmup_epochs:
     if epoch < 1:
       epoch = 1
@@ -197,36 +199,53 @@ y_test = y[n:n2, :]
 
 
 ##
+## Set all (if any) callbacks we want implemented during training and validation
+##
+
+lrate = LearningRateScheduler(set_learning_rate)
+
+earlyStop = EarlyStopping( monitor='val_mean_squared_error',
+                           min_delta=args.min_change,
+                           patience=4,
+                           mode='min' )
+
+my_callbacks = [earlyStop]
+
+
+##
 ## Train model.  Only output information for the validation steps only.
 ##
 
 print(" ")
 print(" ")
-print("             Model Training Output")
-print("*------------------------------------------------*")
+print("                                           Model Training Output")
+print("*-----------------------------------------------------------------------------------------------------------*")
 
-lrate = LearningRateScheduler(set_learning_rate)
-my_callbacks = [lrate]
-
+t1 = datetime.now()
 history = model.fit( x_train, y_train, 
                      batch_size=args.batch_size*args.num_gpus, 
                      epochs=args.epochs, 
                      verbose=2, 
                      validation_data=(x_verify, y_verify),
                      callbacks=my_callbacks )
+training_time = datetime.now() - t1
+print("       Training time was", training_time)
 
 
 ##
 ## End by sending test data through the trained model
 ##
 
+print(" ")
+print(" ")
+print("                                            Model Prediction Test")
+print("*-----------------------------------------------------------------------------------------------------------*")
+
+t1 = datetime.now()
 score = model.evaluate( x=x_test, y=y_test, 
                         batch_size=args.batch_size*args.num_gpus,
                         verbose=0 )
-
-print(" ")
-print(" ")
-print("             Model Prediction Test")
-print("*------------------------------------------------*")
-print("  Test on %s samples, %4.1f percent accuracy" % (num_testing_images,score[1] * 100.0))
+prediction_time = datetime.now() - t1
+print("       Test on %s samples, MSE of %4.3f"  % (num_testing_images,score[1]))
+print("       Prediction time was", prediction_time)
 print(" ")
