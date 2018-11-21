@@ -1,13 +1,13 @@
 import argparse
 import itertools
 import numpy as np
-import tensorflow as tf
 
-from tensorflow.keras import layers, models, backend
-from tensorflow.keras.layers import BatchNormalization, Conv2D, Conv2DTranspose
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.utils import multi_gpu_model
-
+import chainer
+import chainer.functions as F
+import chainer.links as L
+from chainer import Chain, optimizers, datasets, iterators, training, backends
+from chainer.training import extensions
+from chainer.backends import cuda
 
 print(" ")
 print(" ")
@@ -39,7 +39,7 @@ args = parser.parse_args()
 
 print(" ")
 print(" ")
-print("       Starting %s run on %1d GPUS using %s precision" % (backend.backend(),args.num_gpus,backend.floatx()))
+print("       Starting chainer run on %1d GPUS" % (args.num_gpus))
 print(" ")
 print("       Model Settings:")
 print("         * %1d channel correlation run will be performed" % (args.channels))
@@ -53,47 +53,61 @@ print(" ")
 ## Contruct the neural network
 ##
 
-inputs = layers.Input(shape = (80, 120, args.channels))
+class encoder_decoder(Chain):
+    def __init__(self):
 
-bn0 = BatchNormalization(axis=3)(inputs)
-conv1 = layers.Conv2D(64, (5, 5), strides=(2, 2), activation='relu', padding='same')(bn0)
-bn1 = BatchNormalization(axis=3)(conv1)
-conv2 = layers.Conv2D(128, (3, 3), strides=(2, 2), activation='relu', padding='same')(bn1)
-bn2 = BatchNormalization(axis=3)(conv2)
-conv3 = layers.Conv2D(256, (3, 3), strides=(2, 2), activation='relu', padding='same')(bn2)
-bn3 = BatchNormalization(axis=3)(conv3)
+        # make encoder_decoder a child of the Chain class
+        super(encoder_decoder, self).__init__()
 
-conv4 = layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), activation='relu', padding='same')(bn3)
-bn4 = BatchNormalization(axis=3)(conv4)
-conv5 = layers.Conv2DTranspose(64, (3, 3), strides=(2, 2), activation='relu', padding='same')(bn4)
-bn5 = BatchNormalization(axis=3)(conv5)
-conv6 = layers.Conv2DTranspose(1, (5, 5), strides=(2, 2), activation='relu', padding='same')(bn5)
+        # define all the individuals components in the networks (CNNs, BatchNorms, etc)
+        with self.init_scope():
+             self.bn = L.BatchNormalization(axis=3)
+             self.conv1 = L.Convolution2D( in_channels=args.channels, out_channels=64, ksize=5, stride=2 )
+             self.conv2 = L.Convolution2D( in_channels=64, out_channels=128, ksize=3, stride=2 )
+             self.conv3 = L.Convolution2D( in_channels=128, out_channels=256, ksize=3, stride=2 )
+             self.deconv1 = L.Deconvolution2D( in_channels=256, out_channels=128, ksize=3, stride=2 )
+             self.deconv2 = L.Deconvolution2D( in_channels=128, out_channels=64, ksize=3, stride=2 )
+             self.deconv3 = L.Deconvolution2D( in_channels=64, out_channels=1, ksize=5, stride=2 )
 
+    # define the forward propagation process along with activation functions
+    def forward(self, x):
+        h1 = F.relu( self.conv1(self.bn(x)) )
+        h2 = F.relu( self.conv2(self.bn(h1)) )
+        h3 = F.relu( self.conv3(self.bn(h2)) )
+        h4 = F.relu( self.deconv1(self.bn(h3)) )
+        h5 = F.relu( self.deconv2(self.bn(h4)) )
+        return F.relu( self.deconv3(self.bn(h5)) )
+
+model = L.Classifier( encoder_decoder(), lossfun=F.mean_absolute_error )
+
+opt = optimizers.Adam( alpha=args.learn_rate )
+opt.setup( model )
 
 ##
 ## Create separate data-parallel instances of the neural net on each GPU
 ##
 
-if ( args.num_gpus <= 1 ):
-   model = models.Model(inputs=inputs, outputs=conv6)
-else:
-   with tf.device("/cpu:0"):
-        model = models.Model(inputs=inputs, outputs=conv6)
-   model = multi_gpu_model( model, gpus=args.num_gpus )
+for n in range(args.num_gpus):
+    chainer.backends.cuda.get_device_from_id(n).use()
+    model.to_gpu()
 
-model.compile(loss='mean_absolute_error', optimizer=Adam(lr=0.001), metrics=['mae'])
+workspace = int(1 * 2**30)
+chainer.cuda.set_max_workspace_size(workspace)
+chainer.config.use_cudnn = 'always'
 
 
 ## 
-## Load the input data sets
+## Read in the raw input from hard disk
 ##
 
-x = np.load("datasets/10zlevels.npy")
-y = 1000*np.expand_dims(np.load("datasets/full_tp_1980_2016.npy"), axis=3)
+x = np.load("/scratch/pawsey0001/mcheeseman/weather_data/10zlevels.npy")
+y = 1000*np.expand_dims(np.load("/scratch/pawsey0001/mcheeseman/weather_data/full_tp_1980_2016.npy"), axis=3)
+
+dataset = chainer.datasets.TupleDataset( x, y )
 
 
 ##
-## Divide the input dataset into training, verification and testing sets
+## Divide the input data into training, verification and testing sets
 ##
 
 n = num_training_images + num_verification_images
@@ -103,81 +117,90 @@ y_train = y[:num_training_images, :]
 y_verify = y[num_training_images+1:n+1:, :]
 y_test = y[n:n2, :]
 
+##
+## Iterate through all channels looking for the optimial correlation 
+##
+
 min_score = 1.0
-channels = range(6)
+channels = range(2)
 if args.channels==1:
-
-##
-## Iterate through all 10 channels in the input datasets looking for correlation 
-##
-
    for i in channels:
-     if i<9:
+     if i<1:
        x_train = x[:num_training_images, :, :, i:i+1]
        x_verify = x[num_training_images+1:n+1, :, :, i:i+1]
        x_test = x[n:n2, :, :, i:i+1]
 
-       history = model.fit( x_train, y_train, 
-                            batch_size=args.batch_size*args.num_gpus, 
-                            epochs=args.epochs, 
-                            verbose=0, 
-                            validation_data=(x_verify, y_verify) )
-       score = model.evaluate( x=x_test, y=y_test, 
-                               batch_size=args.batch_size*args.num_gpus, 
-                               verbose=0 )
-       print("       channel correlation ", i, i+1, "   evaluation MSE: ", score[1])
-       if score[1]<min_score:
-          min_score = score[1]
-          corr_str = "Channels %1d - %1d" % (i,i+1)
+       # convert to Chainer dataset objects
+       train_dataset = datasets.TupleDataset( x_train, y_train )
+       valid_dataset = datasets.TupleDataset( x_verify, y_verify )
 
-#
-elif args.channels==2:
+       # construct iterator objects for automated training
+       train_iter = iterators.SerialIterator( train_dataset, args.batch_size )
+       valid_iter = iterators.SerialIterator( valid_dataset, args.batch_size, repeat=False, shuffle=False )
+
+       updater = training.updaters.StandardUpdater( train_iter, opt, device=0 )
+       trainer = training.Trainer(updater, (args.epochs, 'epoch'), out='channel_corr_results')
+       trainer.extend( extensions.Evaluator(valid_iter, model, device=0) )
+       trainer.extend( extensions.PrintReport(['epoch', 'validation/main/loss', 'elapsed_time']) )
+       trainer.extend( extensions.ProgressBar() )
+       trainer.run()
+
+#       valid_updater = training.updaters.StandardUpdater( valid_iter, opt, device=0 )
+#       valid_trainer = training.Trainer(valid_updater, (args.epochs, 'epoch'), out='channel_corr_results')
+#       valid_trainer.extend( extensions.PrintReport(['epoch', 'validation/mean_absolute_error', 'elapsed_time']) )
+#       valid_trainer.run()
+
+#       if score[1]<min_score:
+#          min_score = score[1]
+#          corr_str = "Channels %1d - %1d" % (i,i+1)
+
+#elif args.channels==2:
    
 ##
 ## Iterate through all channel combinations in the input datasets looking for correlation
 ##
 
-   for i,j in itertools.combinations(channels,2):
-       x_train = x[:num_training_images, :, :, [i,j]]
-       x_verify = x[num_training_images+1:n+1, :, :, [i,j]]
-       x_test = x[n:n2, :, :, [i,j]]
+#   for i,j in itertools.combinations(channels,2):
+#       x_train = x[:num_training_images, :, :, [i,j]]
+#       x_verify = x[num_training_images+1:n+1, :, :, [i,j]]
+#       x_test = x[n:n2, :, :, [i,j]]
 
-       history = model.fit( x_train, y_train, 
-                            batch_size=args.batch_size*args.num_gpus, 
-                            epochs=args.epochs, 
-                            verbose=0, 
-                            validation_data=(x_verify, y_verify) )
-       score = model.evaluate( x=x_test, y=y_test, 
-                               batch_size=args.batch_size*args.num_gpus, 
-                               verbose=0 )
-       print("       channel correlation ", i, j, "   evaluation MSE: ", score[1])
-       if score[1]<min_score:
-          min_score = score[1]
-          corr_str = "Channels %1d - %1d" % (i,j)
+#       history = model.fit( x_train, y_train, 
+#                            batch_size=args.batch_size*args.num_gpus, 
+#                            epochs=args.epochs, 
+#                            verbose=0, 
+#                            validation_data=(x_verify, y_verify) )
+#       score = model.evaluate( x=x_test, y=y_test, 
+#                               batch_size=args.batch_size*args.num_gpus, 
+#                               verbose=0 )
+#       print("       channel correlation ", i, j, "   evaluation MSE: ", score[1])
+#       if score[1]<min_score:
+#          min_score = score[1]
+#          corr_str = "Channels %1d - %1d" % (i,j)
 
-elif args.channels==3:
+#elif args.channels==3:
 
 ##
 ## Iterate through all channel combinations in the input datasets looking for correlation
 ##
 
-   for i,j,k in itertools.combinations(channels,3):
-       x_train = x[:num_training_images, :, :, [i,j,k]]
-       x_verify = x[num_training_images+1:n+1, :, :, [i,j,k]]
-       x_test = x[n:n2, :, :, [i,j]]
+#   for i,j,k in itertools.combinations(channels,3):
+#       x_train = x[:num_training_images, :, :, [i,j,k]]
+#       x_verify = x[num_training_images+1:n+1, :, :, [i,j,k]]
+#       x_test = x[n:n2, :, :, [i,j]]
 
-       history = model.fit( x_train, y_train, 
-                            batch_size=args.batch_size*args.num_gpus, 
-                            epochs=args.epochs, 
-                            verbose=0, 
-                            validation_data=(x_verify, y_verify) )
-       score = model.evaluate( x=x_test, y=y_test, 
-                               batch_size=args.batch_size*args.num_gpus, 
-                               verbose=0 )
-       print("       channel correlation ", i, j, k, "   evaluation MSE: ", score[1])
-       if score[1]<min_score:
-          min_score = score[1]
-          corr_str = "Channels %1d - %1d - %1d" % (i,j,k)
+#       history = model.fit( x_train, y_train, 
+#                            batch_size=args.batch_size*args.num_gpus, 
+#                            epochs=args.epochs, 
+#                            verbose=0, 
+#                            validation_data=(x_verify, y_verify) )
+#       score = model.evaluate( x=x_test, y=y_test, 
+#                               batch_size=args.bat#ch_size*args.num_gpus, 
+#                               verbose=0 )
+#       print("       channel correlation ", i, j, k, "   evaluation MSE: ", score[1])
+#       if score[1]<min_score:
+#          min_score = score[1]
+#          corr_str = "Channels %1d - %1d - %1d" % (i,j,k)
 
 print(" ")
 print("      minimum MSE of %f achieved with %s" % (min_score,corr_str))
