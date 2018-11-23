@@ -1,0 +1,61 @@
+#!/bin/bash -l
+
+## SLURM job submission script for running the encoder-decoder neural network script (unet.py)
+##
+## Request a single compute node containing 4 Pascal architecture GPUs
+
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:4
+#SBATCH --constraint=p100
+
+## Specify the SLURM partition to be used and a miximum runtime of 1 hour
+
+#SBATCH --time=01:00:00
+#SBATCH --partition=gpuq-dev
+
+#SBATCH --reservation=nvpeertest
+
+## Give a name to the run and do not copy the login node environment settings onto the compute node
+
+#SBATCH --job-name=weather
+#SBATCH --account=pawsey0001
+#SBATCH --export=MYSCRATCH
+
+# Set the name of the python script to be ran and the container image we will load/run
+
+ML_SCRIPT=unet.py
+CONTAINER=tensorflow/tensorflow:1.12.0-gpu-py3
+
+# Set values to the configurable hyperparameters in the ML script
+
+EPOCHS=2
+BATCH_SIZE=128
+LEARN_RATE=0.001
+L2=0.00001
+MIN_DELTA=0.01
+
+# Choose whether to use Shifter or Singularity to run the container
+
+USE_SHIFTER=0
+
+
+##====================================================================================================
+##---------------------------    Do not change anything below this line    ---------------------------
+##====================================================================================================
+
+# set environment for container infrastructure
+if [ $USE_SHIFTER -eq 1 ]
+then
+   module load shifter
+   export RUN_CMD="shifter run ${CONTAINER} python"
+else
+   export SINGULARITY_CACHEDIR=${MYSCRATCH}/singularity
+   export TMPDIR=${MYSCRATCH}/singularity_tmp
+   export RUN_CMD="singularity exec --nv docker://${CONTAINER} python"
+fi
+
+# determine number of GPUs present in SLURM allocation
+IFS=',' read -ra gpus <<< "$CUDA_VISIBLE_DEVICES"
+
+time srun -n 1 --export=ALL ${RUN_CMD} ${ML_SCRIPT} -e ${EPOCHS} -b ${BATCH_SIZE} -g ${#gpus[@]} -l ${LEARN_RATE} -r ${L2} -m ${MIN_DELTA}
+

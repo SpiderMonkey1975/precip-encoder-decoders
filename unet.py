@@ -170,8 +170,8 @@ def set_learning_rate( epoch ):
 ## Load the input data set and then randomly shuffle the order of the input images
 ##
 
-x = np.load("datasets/10zlevels.npy")
-y = 1000*np.expand_dims(np.load("datasets/full_tp_1980_2016.npy"), axis=3)
+x = np.load("/scratch/pawsey0001/mcheeseman/weather_data/10zlevels.npy")
+y = 1000*np.expand_dims(np.load("/scratch/pawsey0001/mcheeseman/weather_data/full_tp_1980_2016.npy"), axis=3)
 
 #print( "total # of input images: ", x.shape[0] )
 idxs = np.arange(x.shape[0])
