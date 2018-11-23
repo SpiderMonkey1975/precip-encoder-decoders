@@ -51,7 +51,7 @@ then
 else
    export SINGULARITY_CACHEDIR=${MYSCRATCH}/singularity
    export TMPDIR=${MYSCRATCH}/singularity_tmp
-   export RUN_CMD="singularity exec --nv docker://${CONTAINER} python"
+   export RUN_CMD="singularity exec --nv -B /scratch,/group docker://${CONTAINER} python"
 fi
 
 # determine number of GPUs present in SLURM allocation
