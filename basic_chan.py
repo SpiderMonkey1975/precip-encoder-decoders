@@ -202,6 +202,6 @@ if args.channels==1:
 #          min_score = score[1]
 #          corr_str = "Channels %1d - %1d - %1d" % (i,j,k)
 
-print(" ")
-print("      minimum MSE of %f achieved with %s" % (min_score,corr_str))
-print(" ")
+#print(" ")
+#print("      minimum MSE of %f achieved with %s" % (min_score,corr_str))
+#print(" ")

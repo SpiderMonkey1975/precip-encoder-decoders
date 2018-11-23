@@ -10,14 +10,14 @@
 
 ## Specify the SLURM partition to be used and a miximum runtime of 1 hour
 
-#SBATCH --time=00:20:00
+#SBATCH --time=00:10:00
 #SBATCH --partition=gpuq-dev
 
 ## Give a name to the run and do not copy the login node environment settings onto the compute node
 
 #SBATCH --job-name=ChannelCorrelation
 #SBATCH --account=pawsey0001
-#SBATCH --export=NONE
+#SBATCH --export=MYSCRATCH
 
 # Set the name of the python script to be ran and the container image we will load/run
 
@@ -36,4 +36,10 @@ CHANNELS=1
 ##
 
 module load shifter 
-srun -n 1 --export=ALL shifter run $(CONTAINER) python ${ML_SCRIPT} -l ${LEARN_RATE} -g 1 -e ${EPOCHS} -b ${BATCH_SIZE} -c ${CHANNELS}
+
+export CUPY_CACHE_DIR=$MYSCRATCH/cupy
+export CUPY_CACHE_SAVE_CUDA_SOURCE=0
+export CUPY_DUMP_CUDA_SOURCE_ON_ERROR=0
+
+#srun -n 1 --export=ALL shifter run ${CONTAINER} python3 ${ML_SCRIPT} -l ${LEARN_RATE} -g 1 -e ${EPOCHS} -b ${BATCH_SIZE} -c ${CHANNELS}
+srun -n 1 --export=ALL shifter run ${CONTAINER} python3 train_cifar.py
