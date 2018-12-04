@@ -136,7 +136,7 @@ print(" ")
 ## the training early if it falls below an user-supplied value.
 ##
 
-if args.min_change>0.0
+if args.min_change>0.0:
    earlyStop = EarlyStopping( monitor='loss',
                               min_delta=args.min_change,
                               patience=4,
