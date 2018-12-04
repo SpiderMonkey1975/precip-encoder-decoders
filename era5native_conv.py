@@ -105,7 +105,7 @@ model.compile(loss='mae', optimizer=opt, metrics=['mae'])
 ##
 
 x = np.load("datasets/z_era5_native_NWHC.npy")
-y = 1008*np.load("datasets/tp_era5_native.npy")[:, :, :, None]
+y = 6000*np.load("datasets/tp_era5_native.npy")[:, :, :, None]
 
 ##
 ## Divide the input data into training, verification and testing sets
