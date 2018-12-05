@@ -10,7 +10,7 @@
 
 ## Specify the SLURM partition to be used and a miximum runtime of 1 hour
 
-#SBATCH --time=01:00:00
+#SBATCH --time=00:30:00
 #SBATCH --partition=gpuq-dev
 
 #SBATCH --reservation=nvpeertest
@@ -32,7 +32,7 @@ EPOCHS=80
 BATCH_SIZE=64
 LEARN_RATE=0.001
 L2=0.00001
-MIN_DELTA=1.0
+MIN_DELTA=0.0001
 
 # Choose whether to use Shifter or Singularity to run the container
 

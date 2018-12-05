@@ -12,19 +12,23 @@ from tensorflow.keras.regularizers import l1_l2
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras import backend as K
 
+##------------------------------------------------------------------------------
+## ERA5 Specific Configuration Details
+##------------------------------------------------------------------------------
+
+features_input_datafile = "datasets/z_era5_native_NWHC.npy"
+labels_input_datafile = "datasets/tp_era5_native.npy"
+num_input_images = 30000
+num_test_images = 640 
+image_width = 240
+image_height = 360
+channels = [1,2]
+
 print(" ")
 print(" ")
 print("*===========================================================================================================*")
 print("*                               RAINFALL AUTO-ENCODER / DECODER PREDICTOR                                   *")
 print("*===========================================================================================================*")
-
-##
-## Set the number of images used for training, verification and testing
-##
-
-num_training_images = 20000
-num_verification_images = 10000
-num_testing_images = 640 
 
 ##
 ## Look for any user specified commandline arguments
@@ -36,7 +40,8 @@ parser.add_argument('-e', '--epochs', type=int, default=1, help="maximum number 
 parser.add_argument('-b', '--batch_size', type=int, default=512, help="set batch size per GPU")
 parser.add_argument('-l', '--learn_rate', type=float, default=0.001, help="set intial learning rate for optimizer")
 parser.add_argument('-r', '--l2_reg', type=float, default=0.00002, help="set L2 regularization parameter")
-parser.add_argument('-m', '--min_change', type=float, default=1.0, help="minimum change in loss that ends run")
+parser.add_argument('-m', '--min_change', type=float, default=0.0001, help="minimum change in validation MAE to continue run")
+parser.add_argument('-f', '--train_fraction', type=float, default=0.7, help="fraction of input images used for training")
 args = parser.parse_args()
 
 print(" ")
@@ -104,32 +109,19 @@ model.compile(loss='mae', optimizer=opt, metrics=['mae'])
 ## Load the raw input data from disk
 ##
 
-x = np.load("datasets/z_era5_native_NWHC.npy")
-y = 6000*np.load("datasets/tp_era5_native.npy")[:, :, :, None]
+x = np.load( features_input_datafile )
+y = 6000*np.load( labels_input_datafile )[:, :, :, None]
 
 ##
-## Divide the input data into training, verification and testing sets
+## Divide the input data into input and test sets
 ##
 
-n = num_training_images + num_verification_images
-n2 = num_training_images + num_verification_images + num_testing_images
+n = num_input_images + num_test_images + 1
+x_test = x[num_input_images:n, 0:image_width, 0:image_height, channels]
+y_test = y[num_input_images:n, 0:image_width, 0:image_height]
 
-x_train = x[1:num_training_images+1, 0:240, 0:360, [1,2]]
-y_train = y[1:num_training_images+1, 0:240, 0:360]
-
-x_verify = x[num_training_images+1:n+1, 0:240, 0:360, [1,2]]
-y_verify = y[num_training_images+1:n+1, 0:240, 0:360]
-
-x_test = x[n:n2, 0:240, 0:360, [1,2]]
-y_test = y[n:n2, 0:240, 0:360]
-
-print(" ")
-print("       Input Description:")
-print("         * images dimensions are %3d by %d" % (x_train.shape[1],x_train.shape[2]))
-print("         * %5d training images used" % (x_train.shape[0]))
-print("         * %5d validation images used" % (x_verify.shape[0]))
-print("         * %4d testing images used" % (x_test.shape[0]))
-print(" ")
+x = x[1:num_input_images+1, 0:image_width, 0:image_height, channels]
+y = y[1:num_input_images+1, 0:image_width, 0:image_height]
 
 ##
 ## Set a callback to monitor the observed validation mean square error. End
@@ -137,7 +129,7 @@ print(" ")
 ##
 
 if args.min_change>0.0:
-   earlyStop = EarlyStopping( monitor='loss',
+   earlyStop = EarlyStopping( monitor='val_mean_absolute_error',
                               min_delta=args.min_change,
                               patience=4,
                               mode='min' )
@@ -155,11 +147,12 @@ print("                                           Model Training Output")
 print("*-----------------------------------------------------------------------------------------------------------*")
 
 t1 = datetime.now()
-history = model.fit( x_train, y_train, 
+history = model.fit( x, y, 
                      batch_size=args.batch_size*args.num_gpus, 
                      epochs=args.epochs, 
-                     verbose=2, 
-                     validation_data=(x_verify, y_verify),
+                     verbose=2,
+                     shuffle=True, 
+                     validation_split=1.0-args.train_fraction,
                      callbacks=my_callbacks )
 training_time = datetime.now() - t1
 print(" ")
@@ -179,7 +172,7 @@ score = model.evaluate( x=x_test, y=y_test,
                         batch_size=args.batch_size*args.num_gpus,
                         verbose=0 )
 prediction_time = datetime.now() - t1
-print("       Test on %s samples, MAE of %4.3f"  % (num_testing_images,score[1]))
+print("       Test on %s samples, MAE of %4.3f"  % (num_test_images,score[1]))
 print("       Prediction time was", prediction_time)
 print(" ")
 
