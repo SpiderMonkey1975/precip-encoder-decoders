@@ -1,16 +1,24 @@
+import argparse
 import numpy as np
 
 print(" ")
 print(" ")
 print("*===========================================================================================================*")
-print("*                                    ERA5 FEATURES DATASET AXIS SWAP                                        *")
+print("*                                   ERA5 Z-POTENTIAL DATASET AXIS SWAP                                      *")
 print("*===========================================================================================================*")
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-d', '--data', type=str, default='native', help="datset type: native, au")
+args = parser.parse_args()
+
+infile = "datasets/z_era5_" + args.data + ".npy"
+outfile = "datasets/z_era5_" + args.data + "_NWHC.npy"
 
 ## 
 ## Load the raw features input data from disk
 ##
 
-features = np.load("datasets/z_era5_native.npy")
+features = np.load( infile )
 
 print( "Initial axis layout: ", features.shape )
 
@@ -26,4 +34,4 @@ print( "New axis layout: ", new_features.shape )
 ## Write modified dataset to hard disk
 ##
 
-np.save( "datasets/z_era5_native_NWHC.npy", new_features )
+np.save( outfile, new_features )
