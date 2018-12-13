@@ -30,7 +30,7 @@ parser.add_argument('-r', '--l2_reg', type=float, default=0.00002, help="set L2 
 parser.add_argument('-m', '--min_change', type=float, default=0.0001, help="minimum change in validation MAE to continue run")
 parser.add_argument('-f', '--train_fraction', type=float, default=0.7, help="fraction of input images used for training")
 parser.add_argument('-d', '--dataset', type=str, default='native', help="datset type: native, au")
-parser.add_argument('-n', '--network', type=str, default='unet', help="set neural network design. Valid values are: unet, encoder")
+parser.add_argument('-n', '--network', type=str, default='encoder', help="set neural network design. Valid values are: unet, encoder")
 args = parser.parse_args()
 
 ##
@@ -115,14 +115,12 @@ else:
 
 print(" ")
 print(" ")
-print("                                           Model Training Output")
-print("*-----------------------------------------------------------------------------------------------------------*")
 
 t1 = datetime.now()
 history = model.fit( x, y, 
                      batch_size=args.batch_size*args.num_gpus, 
                      epochs=args.epochs, 
-                     verbose=1,
+                     verbose=2,
                      shuffle=True, 
                      validation_split=1.0-args.train_fraction,
                      callbacks=my_callbacks )

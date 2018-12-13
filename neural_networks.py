@@ -25,15 +25,17 @@ def GetModel( num_gpus, inputs, net ):
 
 def encoder( filters, kernel_sizes, strides, conv_kernel_reg, inputs ):
     net = inputs
+    net = BatchNormalization(axis=3)(net)
     for n in range(len(filters)):
-        net = BatchNormalization(axis=3)(net)
+    #    net = BatchNormalization(axis=3)(net)
         net = Conv2D(filters[n], kernel_sizes[n], strides[n], activation='relu', padding='same', kernel_regularizer=conv_kernel_reg)(net)
     return net
 
 def decoder( filters, kernel_sizes, strides, conv_kernel_reg, inputs ):
     net = inputs
+    net = BatchNormalization(axis=3)(net)
     for n in range(len(filters)):
-        net = BatchNormalization(axis=3)(net)
+    #    net = BatchNormalization(axis=3)(net)
         net = Conv2DTranspose(filters[n], kernel_sizes[n], strides[n], padding='same', activation='relu', kernel_regularizer=conv_kernel_reg)(net)
     return net
 
@@ -62,46 +64,11 @@ def encoder_decoder( l2_reg, image_width, image_height, num_channels, num_gpus )
     return GetModel( num_gpus, inputs, net )
 
 
-def encoder_decoder2( l2_reg, image_width, image_height, num_channels, num_gpus ):
-
-    # check if L2 regularization has been requested by the user
-    if l2_reg > 0.0001:
-       conv_kernel_reg = l1_l2(l1=0.0, l2=l2_reg)
-    else:
-       conv_kernel_reg = None
-
-    # set the input layer
-    inputs = layers.Input(shape = (image_width, image_height, num_channels))
-
-    # construct the encoding section
-    filters = [16,32,64,128,256]
-    kernel_sizes = [4,6,8,10,12]
-    strides = [[2,1],2,[2,1],2,2]
-    net = encoder( filters, kernel_sizes, strides, conv_kernel_reg, inputs )
-
-    # construct the decoder section
-    filters = [128,64,32,16,1]
-    net = decoder( filters, kernel_sizes, strides, conv_kernel_reg, net )
-    
-    return GetModel( num_gpus, inputs, net )
-
-
 ##
 ## unet 
 ##
 ## Python function that creates a basic unet neural network 
 ##
-
-#def RightBlock( conv, num_filter, kernel_size, inputs ):
-#    net = Conv2DTranspose( num_filter, 2, 2, padding="same" )(inputs) 
-#    print( "upsampled dimensions:", net.shape )
-#    print( "conv dimensions:", conv.shape )
-#    net = layers.concatenate([net, conv], axis=3)
-#    bn = BatchNormalization(axis=3)(net)
-#    conv = Conv2D(num_filter, 3, activation='relu', padding='same')(bn)
-#    bn = BatchNormalization(axis=3)(conv)
-#    return Conv2D(num_filter, 3, activation='relu', padding='same')(conv)
-#    bn12 = BatchNormalization(axis=3)(conv6)
 
 def unet( image_width, image_height, num_channels, num_gpus ):
 
