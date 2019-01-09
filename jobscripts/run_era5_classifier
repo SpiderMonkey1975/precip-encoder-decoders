@@ -5,18 +5,18 @@
 ## Request a single compute node containing 4 Pascal architecture GPUs
 
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:4
-#SBATCH --constraint=p100
+#SBATCH --gres=gpu:1
+##SBATCH --constraint=p100
 
 ## Specify the SLURM partition to be used and a miximum runtime of 1 hour
 
-#SBATCH --time=05:00:00
+#SBATCH --time=07:00:00
 #SBATCH --partition=gpuq
 
 ## Give a name to the run and do not copy the login node environment settings onto the compute node
 
 #SBATCH --job-name=ERA5_Classifier
-#SBATCH --account=pawsey0001
+#SBATCH --account=director2107
 #SBATCH --export=NONE
 
 # Set the name of the python script to be ran and the container image we will load/run
@@ -31,7 +31,9 @@ BATCH_SIZE=32
 LEARN_RATE=0.0001
 VARIABLE=z
 L2_REG=0.0001
-DATASET=au
+DATASET=native
+MAX_FILTERS=64
+MAX_HIDDEN_NODES=128
 
 ##====================================================================================================
 ##---------------------------    Do not change anything below this line    ---------------------------
@@ -44,5 +46,5 @@ export RUN_CMD="shifter run ${CONTAINER} python"
 # determine number of GPUs present in SLURM allocation
 IFS=',' read -ra gpus <<< "$CUDA_VISIBLE_DEVICES"
 
-time srun -n 1 --export=ALL -u ${RUN_CMD} ${ML_SCRIPT} -e ${EPOCHS} -b ${BATCH_SIZE} -g ${#gpus[@]} -l ${LEARN_RATE} -v ${VARIABLE} -r ${L2_REG} -d ${DATASET}
+time srun -n 1 --export=ALL -u ${RUN_CMD} ${ML_SCRIPT} -e ${EPOCHS} -b ${BATCH_SIZE} -g ${#gpus[@]} -l ${LEARN_RATE} -v ${VARIABLE} -r ${L2_REG} -d ${DATASET} -f ${MAX_FILTERS} -n ${MAX_HIDDEN_NODES}
 

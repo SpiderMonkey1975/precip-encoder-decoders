@@ -4,7 +4,7 @@ import sys, argparse, neural_networks
 
 from datetime import datetime
 
-from neural_networks import simple_classifier, unet, vgg_classifier, encoder_decoder 
+from neural_networks import simple_classifier
 
 from tensorflow.keras import models
 from tensorflow.keras.optimizers import Adam
@@ -28,6 +28,8 @@ parser.add_argument('-l', '--learn_rate', type=float, default=0.0001, help="set 
 parser.add_argument('-v', '--variable', type=str, default='z', help="set variable to be used for training. Valid values are z, t, rh")
 parser.add_argument('-r', '--l2_reg', type=float, default=0.00001, help="set L2 regularization parameter")
 parser.add_argument('-d', '--data', type=str, default='native', help="dataset type: native, au")
+parser.add_argument('-f', '--max_filters', type=int, default=64, help="set max # of filters used for CNNs")
+parser.add_argument('-n', '--max_hidden_nodes', type=int, default=128, help="set max # of ihidden nodes used for perceptron")
 args = parser.parse_args()
 
 print(" ")
@@ -41,17 +43,13 @@ print("         * a batch size of %2d images per GPU will be employed" % (args.b
 print("         * the ADAM optimizer with a learning rate of %6.4f will be used" % (args.learn_rate))
 
 ##
-## Set some important dimension data
+## Contruct the neural network 
 ##
 
 image_width = 241
 image_height = 361
 
-##
-## Contruct the neural network 
-##
-
-model = simple_classifier( args.l2_reg, image_width, image_height, args.num_gpus )
+model = simple_classifier( args.l2_reg, image_width, image_height, args.num_gpus, args.max_filters, args.max_hidden_nodes ) 
 
 ##
 ## Set the appropriate optimizer and loss function 
