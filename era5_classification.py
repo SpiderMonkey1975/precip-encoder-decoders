@@ -1,20 +1,23 @@
 import numpy as np
 import tensorflow as tf
-import sys, argparse, neural_networks
+import sys, argparse
 
 from datetime import datetime
 
-from neural_networks import simple_classifier
+from networks import simple, unet
+from networks.simple import encoder_decoder
+from networks.unet import unet 
 
-from tensorflow.keras import models
-from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
+from tensorflow.keras import models, layers
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.utils import multi_gpu_model
 
 print(" ")
 print(" ")
-print("*===========================================================================================================*")
-print("*                                             RAINFALL CLASSIFIER                                           *")
-print("*===========================================================================================================*")
+print("*===================================================================================================*")
+print("*                                         RAINFALL CLASSIFIER                                       *")
+print("*===================================================================================================*")
 
 ##
 ## Look for any user specified commandline arguments
@@ -26,10 +29,7 @@ parser.add_argument('-e', '--epochs', type=int, default=25, help="maximum number
 parser.add_argument('-b', '--batch_size', type=int, default=32, help="set batch size per GPU")
 parser.add_argument('-l', '--learn_rate', type=float, default=0.0001, help="set intial learning rate for optimizer")
 parser.add_argument('-v', '--variable', type=str, default='z', help="set variable to be used for training. Valid values are z, t, rh")
-parser.add_argument('-r', '--l2_reg', type=float, default=0.00001, help="set L2 regularization parameter")
 parser.add_argument('-d', '--data', type=str, default='native', help="dataset type: native, au")
-parser.add_argument('-f', '--max_filters', type=int, default=64, help="set max # of filters used for CNNs")
-parser.add_argument('-n', '--max_hidden_nodes', type=int, default=128, help="set max # of ihidden nodes used for perceptron")
 args = parser.parse_args()
 
 print(" ")
@@ -43,13 +43,22 @@ print("         * a batch size of %2d images per GPU will be employed" % (args.b
 print("         * the ADAM optimizer with a learning rate of %6.4f will be used" % (args.learn_rate))
 
 ##
-## Contruct the neural network 
+## Construct the neural network 
 ##
 
-image_width = 241
-image_height = 361
+image_width = 240
+image_height = 360
+input_layer = layers.Input(shape = (image_width, image_height, 3))
 
-model = simple_classifier( args.l2_reg, image_width, image_height, args.num_gpus, args.max_filters, args.max_hidden_nodes ) 
+#net = encoder_decoder( input_layer ) 
+net = unet( input_layer )
+
+if ( args.num_gpus <= 1 ):
+   model = models.Model(inputs=input_layer, outputs=net)
+else:
+   with tf.device("/cpu:0"):
+        model = models.Model(inputs=input_layer, outputs=net)
+   model = multi_gpu_model( model, gpus=args.num_gpus )
 
 ##
 ## Set the appropriate optimizer and loss function 
@@ -70,7 +79,7 @@ y_train = np.load( inputfile )
 
 num_images = np.amin( [x_train.shape[0],y_train.shape[0]] )
 
-x_train = x_train[ :num_images, :, :, : ]
+x_train = x_train[ :num_images, :image_width, :image_height, : ]
 y_train = y_train[ :num_images, : ]
 
 ##
@@ -79,8 +88,8 @@ y_train = y_train[ :num_images, : ]
 
 print(" ")
 print(" ")
-print("                                           Model Training Output")
-print("*-----------------------------------------------------------------------------------------------------------*")
+print("                                       Model Training Output")
+print("*---------------------------------------------------------------------------------------------------*")
 
 t1 = datetime.now()
 history = model.fit( x=x_train, y=y_train, 
@@ -110,8 +119,8 @@ y_test = np.load( inputfile )
 
 print(" ")
 print(" ")
-print("                                            Model Prediction Test")
-print("*-----------------------------------------------------------------------------------------------------------*")
+print("                                        Model Prediction Test")
+print("*---------------------------------------------------------------------------------------------------*")
 
 t1 = datetime.now()
 score = model.evaluate( x=x_test, y=y_test, 
