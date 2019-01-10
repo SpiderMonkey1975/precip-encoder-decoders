@@ -24,7 +24,7 @@ def add_perceptron( net ):
 ## OUTPUT: net -> fully formed neural network
 ##
 
-def 1layer_unet( input_layer ):
+def unet_1_layer( input_layer ):
 
     # construct the contracting path
 
@@ -55,7 +55,7 @@ def 1layer_unet( input_layer ):
 #
 #    return net
 
-def 2layer_unet( input_layer ):
+def unet_2_layer( input_layer ):
 
     # construct the contracting path 
 
@@ -88,7 +88,7 @@ def 2layer_unet( input_layer ):
     # add a multi-layer perceptron section for the image classification implementation
     return add_perceptron( net )
    
-def 3layer_unet( input_layer ):
+def unet_3_layer( input_layer ):
 
     # construct the contracting path
 

@@ -6,7 +6,7 @@ from datetime import datetime
 
 from networks import simple, unet
 from networks.simple import encoder_decoder
-from networks.unet import unet 
+from networks.unet import unet_1_layer 
 
 from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers
@@ -51,7 +51,7 @@ image_height = 360
 input_layer = layers.Input(shape = (image_width, image_height, 3))
 
 #net = encoder_decoder( input_layer ) 
-net = unet( input_layer )
+net = unet_1_layer( input_layer )
 
 if ( args.num_gpus <= 1 ):
    model = models.Model(inputs=input_layer, outputs=net)
