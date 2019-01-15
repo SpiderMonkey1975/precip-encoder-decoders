@@ -44,22 +44,22 @@ idx = 0
 for n in range( num_records ):
     val = np.amax(precip_data[n,:,:])
 
-    # Class 1 - extreme rainfall  
+    # Class 1 - extreme rainfall events (over 30mm per hour)
     if val > limits[2]:
        one_hot_encoding[idx,0] = 1
        idx = idx + 1
 
-    # Class 2 - heavy rainfall 
+    # Class 2 - heavy rainfall events (between 30 and 15mm per hour)
     if val > limits[1] and val <= limits[2]:
        one_hot_encoding[idx,1] = 1
        idx = idx + 1
 
-    # Class 3 - rainfall  
+    # Class 3 - rainfall events (between 10 and 15mm per hour)
     if val > limits[0] and val <= limits[1]:
        one_hot_encoding[idx,2] = 1
        idx = idx + 1
 
-    # Class 4 - insignificant or no rainfall 
+    # Class 4 - insignificant or no rainfall events (under 10mm per hour)
     if val <= limits[0]:
        one_hot_encoding[idx,3] = 1
        idx = idx + 1
@@ -69,43 +69,36 @@ print("      [2/8] one-hot encoding completed")
 ## Select the same number of rainfall class instances for the image recognition 
 ##
 
-num_records = np.min(np.sum(one_hot_encoding, axis=0)) 
-num_test_records = int( 0.1 * num_records )
-num_train_records = num_records - num_test_records 
+num_records = np.min( np.sum(one_hot_encoding,axis=0) )
 
 cnt = np.zeros( 4, dtype=int )
-indicies = np.empty( (num_records,4), dtype=int )
+indicies = np.empty( 4*num_records, dtype=int )
 
-for i in range( 4 ):
-    for n in range( one_hot_encoding.shape[0] ):
+idx = 0
+for n in range( one_hot_encoding.shape[0] ):
+    for i in range( 4 ):
         if one_hot_encoding[n,i] == 1 and cnt[i] < num_records:
-           indicies[cnt[i],i] = n
            cnt[i] = cnt[i] + 1
+           indicies[idx] = n
+           idx = idx + 1 
 
-##
-## Create the training / test dataset split 
-##
+np.random.shuffle( indicies )
 
-train_indicies = indicies[ :num_train_records,: ]
-train_indicies.flatten()
-np.random.shuffle( train_indicies )
-
-test_indicies = indicies[ num_train_records:num_records,: ]
-test_indicies.flatten()
-np.random.shuffle( test_indicies )
+training_indicies = indicies[ :30000 ]
+test_indicies = indicies[ 30000: ]
 print("      [3/8] indicies selected")
- 
-train_one_hot_encoding = one_hot_encoding[ train_indicies,: ]
-test_one_hot_encoding = one_hot_encoding[ test_indicies,: ]
 
 ##
 ## Output label data to hard disk
 ##
-
+       
 filename = "input_data/training/" + args.data + "_one_hot_encoding.npy"
-np.save( filename, train_one_hot_encoding )
+train_set = one_hot_encoding[ training_indicies,: ]
+np.save( filename, train_set )
+
 filename = "input_data/test/" + args.data + "_one_hot_encoding.npy"
-np.save( filename, test_one_hot_encoding )
+test_set = one_hot_encoding[ training_indicies,: ]
+np.save( filename, test_set )
 print("      [4/8] label data written to hard disk")
 
 ##
@@ -129,11 +122,12 @@ print("      [7/8] normalization completed")
 ## Output processed features data to hard disk
 ##
 
-z_train_data = z_data[train_indicies,:,:,:]
+train_set = z_data[ training_indicies,:,:,: ]
 filename = "input_data/training/z_era5_" + args.data + "_CLASSIFICATION.npy"
-np.save( filename, z_train_data )
-z_test_data = z_data[test_indicies,:,:,:]
+np.save( filename, train_set )
+
+test_set = z_data[ test_indicies,:,:,: ]
 filename = "input_data/test/z_era5_" + args.data + "_CLASSIFICATION.npy"
-np.save( filename, z_test_data )
+np.save( filename, test_set )
 print("      [8/8] features data written to hard disk")
 print(" ")
