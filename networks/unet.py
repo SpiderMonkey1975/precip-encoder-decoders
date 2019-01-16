@@ -24,23 +24,23 @@ def add_perceptron( net ):
 ## OUTPUT: net -> fully formed neural network
 ##
 
-def unet_1_layer( input_layer ):
+def unet_1_layer( input_layer, num_filters ):
 
     # construct the contracting path
 
     net = BatchNormalization(axis=3)( input_layer )
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-    cnv1 = Conv2D( 32, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    cnv1 = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     net = MaxPooling2D( 2 )(cnv1)
 
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
 
     # construct the expansive path
 
     net = UpSampling2D( 2 )(net)
     net = concatenate( [net,cnv1], axis=3 )
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
 
     net = Conv2D( 2, 1, activation='relu', padding='same' )(net)
 

@@ -4,8 +4,9 @@ import sys, argparse
 
 from datetime import datetime
 
-from networks import unet
+from networks import unet, transfer
 from networks.unet import unet_1_layer 
+from networks.transfer import transfer_learning
 
 from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers
@@ -49,7 +50,8 @@ image_width = 240
 image_height = 360
 input_layer = layers.Input(shape = (image_width, image_height, 3))
 
-net = unet_1_layer( input_layer )
+#net = unet_1_layer( input_layer, 8, 16 )
+net = transfer_learning( 0, input_layer, 16 )
 
 if ( args.num_gpus <= 1 ):
    model = models.Model(inputs=input_layer, outputs=net)
