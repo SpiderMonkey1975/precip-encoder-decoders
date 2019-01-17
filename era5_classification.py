@@ -5,8 +5,7 @@ import sys, argparse
 from datetime import datetime
 
 from networks import unet, transfer
-from networks.unet import unet_1_layer 
-from networks.transfer import transfer_learning
+from networks.unet import unet_1_layer, unet_2_layer 
 
 from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers
@@ -32,6 +31,9 @@ parser.add_argument('-v', '--variable', type=str, default='z', help="set variabl
 parser.add_argument('-d', '--data', type=str, default='native', help="dataset type: native, au")
 args = parser.parse_args()
 
+if ( args.data == "native" ):
+   args.variable = 'z'
+
 print(" ")
 print(" ")
 print("       Starting %s run on %1d GPUS using %s precision" % (K.backend(),args.num_gpus,K.floatx()))
@@ -51,7 +53,7 @@ image_height = 360
 input_layer = layers.Input(shape = (image_width, image_height, 3))
 
 #net = unet_1_layer( input_layer, 8, 16 )
-net = transfer_learning( 0, input_layer, 16 )
+net = unet_2_layer( input_layer, 32, 128 )
 
 if ( args.num_gpus <= 1 ):
    model = models.Model(inputs=input_layer, outputs=net)

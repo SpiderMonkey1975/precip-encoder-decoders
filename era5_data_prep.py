@@ -31,7 +31,8 @@ print(" ")
 filename = "/scratch/director2107/ERA5_Data/ERA5_Native/tp_era5_" + args.data + ".npy"
 precip_data = 1000.0 * np.load( filename )
 print("      STATUS:")
-print("      [1/8] precipitation data read")
+print("      [1/2] precipitation data read")
+print("           -> total precipitation data read")
 
 ##
 ## Generate labels array(s)
@@ -63,7 +64,7 @@ for n in range( num_records ):
     if val <= limits[0]:
        one_hot_encoding[idx,3] = 1
        idx = idx + 1
-print("      [2/8] one-hot encoding completed")
+print("           -> one-hot encoding completed")
 
 ##
 ## Select the same number of rainfall class instances for the image recognition 
@@ -86,7 +87,7 @@ np.random.shuffle( indicies )
 
 training_indicies = indicies[ :30000 ]
 test_indicies = indicies[ 30000: ]
-print("      [3/8] indicies selected")
+print("           -> indicies selected")
 
 ##
 ## Output label data to hard disk
@@ -99,35 +100,47 @@ np.save( filename, train_set )
 filename = "input_data/test/" + args.data + "_one_hot_encoding.npy"
 test_set = one_hot_encoding[ training_indicies,: ]
 np.save( filename, test_set )
-print("      [4/8] label data written to hard disk")
+print("           -> label data written to hard disk")
 
 ##
 ## Read in and process features data 
 ##
 
-filename = "/scratch/director2107/ERA5_Data/ERA5_Native/z_era5_" + args.data + ".npy"
-z_data = np.load( filename )
-print("      [5/8] atmospheric pressure read")
+print("      [2/2] processing features data")
+if args.data == "native":
+   variables = ['z']
+   varnames = ['atmospheric pressure']
+else:
+   variables = ['z','t','rh']
+   varnames = ['atmospheric pressure','atmospheric temperature','relative humidity']
 
-z_data = np.moveaxis(z_data, 1, 3)
-print("      [6/8] axis swap performed")
+for var in variables:
+   print("           -> %s" % (var))
+   filename = "/scratch/director2107/ERA5_Data/ERA5_Native/" + var + "_era5_" + args.data + ".npy"
+   features_data = np.load( filename )
+   print("              * data read from hard disk")
 
-for n in range( z_data.shape[0] ):
-    mean_val = np.mean( z_data[n,:,:,:] )
-    std_dev = np.std( z_data[n,:,:,:] )
-    z_data[n,:,:,:] = (z_data[n,:,:,:] - mean_val) / std_dev
-print("      [7/8] normalization completed")
+   features_data = np.moveaxis(features_data, 1, 3)
+   print("              * axis swap performed")
+
+   for n in range( features_data.shape[0] ):
+       mean_val = np.mean( features_data[n,:,:,:] )
+       std_dev = np.std( features_data[n,:,:,:] )
+       features_data[n,:,:,:] = (features_data[n,:,:,:] - mean_val) / std_dev
+   print("              * normalization completed")
 
 ##
 ## Output processed features data to hard disk
 ##
 
-train_set = z_data[ training_indicies,:,:,: ]
-filename = "input_data/training/z_era5_" + args.data + "_CLASSIFICATION.npy"
-np.save( filename, train_set )
+   train_set = features_data[ training_indicies,:,:,: ]
+   test_set = features_data[ test_indicies,:,:,: ]
+   print("              * training/test set selection done")
 
-test_set = z_data[ test_indicies,:,:,: ]
-filename = "input_data/test/z_era5_" + args.data + "_CLASSIFICATION.npy"
-np.save( filename, test_set )
-print("      [8/8] features data written to hard disk")
+   filename = "input_data/training/" + var + "_era5_" + args.data + "_CLASSIFICATION.npy"
+   np.save( filename, train_set )
+
+   filename = "input_data/test/" + var + "_era5_" + args.data + "_CLASSIFICATION.npy"
+   np.save( filename, test_set )
+   print("              * features data written to hard disk")
 print(" ")
