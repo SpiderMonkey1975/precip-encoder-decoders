@@ -5,11 +5,11 @@ from tensorflow.keras import layers
 from tensorflow.keras.layers import BatchNormalization, Conv2D, Conv2DTranspose, MaxPooling2D, Dropout
 from tensorflow.keras.layers import Dense, Flatten, UpSampling2D, concatenate, Dropout
 
-def add_perceptron( net ):
+def add_perceptron( net, num_nodes ):
     net = Flatten()(net)
-    net = Dense( 128, activation='relu' )(net)
+    net = Dense( 4*num_nodes, activation='relu' )(net)
     net = Dropout(0.2)(net)
-    net = Dense( 32, activation='relu' )(net)
+    net = Dense( num_nodes, activation='relu' )(net)
     return Dense( 4, activation='softmax' )(net)
 
 ##
@@ -24,12 +24,15 @@ def add_perceptron( net ):
 ## OUTPUT: net -> fully formed neural network
 ##
 
-def unet_1_layer( input_layer, num_filters ):
+def unet_1_layer( input_layer, num_filters, num_hidden_nodes ):
+
+    dropout_fraction = 0.3
 
     # construct the contracting path
 
     net = BatchNormalization(axis=3)( input_layer )
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
     cnv1 = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     net = MaxPooling2D( 2 )(cnv1)
 
@@ -39,145 +42,103 @@ def unet_1_layer( input_layer, num_filters ):
 
     net = UpSampling2D( 2 )(net)
     net = concatenate( [net,cnv1], axis=3 )
+    net = BatchNormalization(axis=3)( net )
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
 
     net = Conv2D( 2, 1, activation='relu', padding='same' )(net)
 
     # add a multi-layer perceptron section for the image classification implementation
-    return add_perceptron( net )
+    return add_perceptron( net, num_hidden_nodes )
 
-def unet_2_layer( input_layer ):
+def unet_2_layer( input_layer, num_filters, num_hidden_nodes ):
+
+    dropout_fraction = 0.2
 
     # construct the contracting path 
 
     net = BatchNormalization(axis=3)( input_layer )
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-    cnv1 = Conv2D( 32, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    cnv1 = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     net = MaxPooling2D( 2 )(cnv1)
 
     net = BatchNormalization(axis=3)( net )
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
-    cnv2 = Conv2D( 64, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    cnv2 = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
     net = MaxPooling2D( 2 )(cnv2)
 
-    net = Conv2D( 128, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( 4*num_filters, 3, activation='relu', padding='same' )(net)
 
     # construct the expansive path  
 
     net = UpSampling2D( 2 )(net)
     net = concatenate( [net,cnv2], axis=3 )
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
 
     net = UpSampling2D( 2 )(net)
     net = concatenate( [net,cnv1], axis=3 )
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
 
     net = Conv2D( 2, 1, activation='relu', padding='same' )(net)
 
     # add a multi-layer perceptron section for the image classification implementation
-    return add_perceptron( net )
+    return add_perceptron( net, num_hidden_nodes )
    
-def unet_3_layer( input_layer ):
+def unet_3_layer( input_layer, num_filters, num_hidden_nodes ):
+
+    dropout_fraction = 0.2
 
     # construct the contracting path
 
     net = BatchNormalization(axis=3)( input_layer )
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-    net = Dropout(0.2)(net)
-    cnv1 = Conv2D( 32, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    cnv1 = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     net = MaxPooling2D( 2 )(cnv1)
 
     net = BatchNormalization(axis=3)( net )
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
-    net = Dropout(0.2)(net)
-    cnv2 = Conv2D( 64, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    cnv2 = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
     net = MaxPooling2D( 2 )(cnv2)
 
     net = BatchNormalization(axis=3)( net )
-    net = Conv2D( 128, 3, activation='relu', padding='same' )(net)
-    net = Dropout(0.2)(net)
-    cnv3 = Conv2D( 128, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( 4*num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    cnv3 = Conv2D( 4*num_filters, 3, activation='relu', padding='same' )(net)
     net = MaxPooling2D( 2 )(cnv3)
 
-    net = Conv2D( 256, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( 8*num_filters, 3, activation='relu', padding='same' )(net)
 
     # construct the expansive path
 
     net = UpSampling2D( 2 )(net)
     net = concatenate( [net,cnv3], axis=3 )
-    net = Conv2D( 128, 3, activation='relu', padding='same' )(net)
-    net = Dropout(0.2)(net)
-    net = Conv2D( 128, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( 4*num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    net = Conv2D( 4*num_filters, 3, activation='relu', padding='same' )(net)
 
     net = UpSampling2D( 2 )(net)
     net = concatenate( [net,cnv2], axis=3 )
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
-    net = Dropout(0.2)(net)
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
 
     net = UpSampling2D( 2 )(net)
     net = concatenate( [net,cnv1], axis=3 )
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-    net = Dropout(0.2)(net)
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = Dropout(dropout_fraction)(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
 
     net = Conv2D( 2, 1, activation='relu', padding='same' )(net)
 
     # add a multi-layer perceptron section for the image classification implementation
-    return add_perceptron( net )
+    return add_perceptron( net, num_hidden_nodes )
 
-def full_unet( input_layer ):
-
-    # construct the contracting path
-
-    net = BatchNormalization(axis=3)( input_layer )
-    net = Conv2D( 16, 3, activation='relu', padding='same' )(net)
-    cnv1 = Conv2D( 16, 3, activation='relu', padding='same' )(net)
-    net = MaxPooling2D( 2 )(cnv1)
-
-    net = BatchNormalization(axis=3)( net )
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-    cnv2 = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-    net = MaxPooling2D( 2 )(cnv2)
-
-    net = BatchNormalization(axis=3)( net )
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
-    cnv3 = Conv2D( 64, 3, activation='relu', padding='same' )(net)
-    net = MaxPooling2D( 2 )(cnv3)
-
-    net = BatchNormalization(axis=3)( net )
-    net = Conv2D( 128, 3, activation='relu', padding='same' )(net)
-    cnv4 = Conv2D( 128, 3, activation='relu', padding='same' )(net)
-    net = MaxPooling2D( 2 )(cnv4)
-
-    net = Conv2D( 256, 3, activation='relu', padding='same' )(net)
-
-    # construct the expansive path
-
-    net = UpSampling2D( 2 )(net)
-    net = concatenate( [net,cnv4], axis=3 )
-    net = Conv2D( 128, 3, activation='relu', padding='same' )(net)
-    net = Conv2D( 128, 3, activation='relu', padding='same' )(net)
-
-    net = UpSampling2D( 2 )(net)
-    net = concatenate( [net,cnv3], axis=3 )
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
-    net = Conv2D( 64, 3, activation='relu', padding='same' )(net)
-
-    net = UpSampling2D( 2 )(net)
-    net = concatenate( [net,cnv2], axis=3 )
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-    net = Conv2D( 32, 3, activation='relu', padding='same' )(net)
-
-    net = UpSampling2D( 2 )(net)
-    net = concatenate( [net,cnv1], axis=3 )
-    net = Conv2D( 16, 3, activation='relu', padding='same' )(net)
-    net = Conv2D( 16, 3, activation='relu', padding='same' )(net)
-
-    net = Conv2D( 2, 1, activation='relu', padding='same' )(net)
-
-    # add a multi-layer perceptron section for the image classification implementation
-    return add_perceptron( net )

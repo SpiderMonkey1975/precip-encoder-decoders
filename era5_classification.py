@@ -11,6 +11,7 @@ from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import multi_gpu_model
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 
 print(" ")
 print(" ")
@@ -29,6 +30,9 @@ parser.add_argument('-b', '--batch_size', type=int, default=32, help="set batch 
 parser.add_argument('-l', '--learn_rate', type=float, default=0.0001, help="set intial learning rate for optimizer")
 parser.add_argument('-v', '--variable', type=str, default='z', help="set variable to be used for training. Valid values are z, t, rh")
 parser.add_argument('-d', '--data', type=str, default='native', help="dataset type: native, au")
+parser.add_argument('-f', '--num_filters', type=int, default=32, help="number of filters used by the CNNs")
+parser.add_argument('-n', '--num_nodes', type=int, default=32, help="number of hidden nodes in last layer of classifier")
+parser.add_argument('-y', '--layers', type=int, default=1, help="number of layers to be used in U-Net autoencoder")
 args = parser.parse_args()
 
 if ( args.data == "native" ):
@@ -52,8 +56,13 @@ image_width = 240
 image_height = 360
 input_layer = layers.Input(shape = (image_width, image_height, 3))
 
-#net = unet_1_layer( input_layer, 8, 16 )
-net = unet_2_layer( input_layer, 32, 128 )
+print(" ")
+print("       Network Settings:")
+print("         * using UNet autoencoder design with %d layer depth" % (args.layers))
+print("         * initially %d filters used for CNNs" % (args.num_filters))
+print("         * classifier uses layers with %d and %d numbers of hidden nodes respctively" % (args.num_nodes,4*args.num_nodes))
+
+net = unet_1_layer( input_layer, args.num_filters, args.num_nodes )
 
 if ( args.num_gpus <= 1 ):
    model = models.Model(inputs=input_layer, outputs=net)
@@ -85,6 +94,24 @@ x_train = x_train[ :num_images, :image_width, :image_height, : ]
 y_train = y_train[ :num_images, : ]
 
 ##
+## Set callbacks implemented during training 
+##
+
+earlyStop = EarlyStopping( monitor='val_acc',
+                           min_delta=0.0005,
+                           patience=4,
+                           mode='max' )
+
+#modelSave = ModelCheckpoint( filepath='checkpoints/ERA5_weights_epoch{epoch:02d}.hdf5',
+#                             monitor='val_acc',
+#                             save_best_only=True,
+#                             mode='min',
+#                             period=5 )
+#                             
+#my_callbacks = [earlyStop, modelSave]
+my_callbacks = [earlyStop]
+
+##
 ## Train model.  Only output information for the validation steps only.
 ##
 
@@ -99,7 +126,8 @@ history = model.fit( x=x_train, y=y_train,
                      epochs=args.epochs, 
                      verbose=2,
                      shuffle=True, 
-                     validation_split=0.16 )
+                     validation_split=0.2,
+                     callbacks=my_callbacks )
 training_time = datetime.now() - t1
 print(" ")
 print("       Training time was", training_time)
