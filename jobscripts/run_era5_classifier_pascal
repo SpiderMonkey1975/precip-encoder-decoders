@@ -4,8 +4,8 @@
 
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
-#SBATCH --time=01:30:00
-#SBATCH --partition=gpuq
+#SBATCH --time=00:30:00
+#SBATCH --partition=gpuq-dev
 #SBATCH --job-name=ERA5_Classifier
 #SBATCH --account=director2107
 #SBATCH --export=NONE
@@ -17,14 +17,14 @@ CONTAINER=tensorflow/tensorflow:1.12.0-gpu-py3
 
 # Set values to the configurable hyperparameters in the ML script
 
-EPOCHS=100
-BATCH_SIZE=16
+EPOCHS=25
+BATCH_SIZE=32
 LEARN_RATE=0.0001
 VARIABLE=z
 DATASET=au
 NUM_FILTERS=32
-NUM_HIDDEN_NODES=32
-NUM_UNET_LAYERS=1
+NUM_HIDDEN_NODES=128
+NUM_UNET_LAYERS=-1
 
 ##====================================================================================================
 ##---------------------------    Do not change anything below this line    ---------------------------

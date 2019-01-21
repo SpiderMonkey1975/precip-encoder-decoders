@@ -4,8 +4,8 @@ import sys, argparse
 
 from datetime import datetime
 
-from networks import unet, transfer
-from networks.unet import unet_1_layer, unet_2_layer 
+from networks import unet
+from networks.unet import unet_1_layer, unet_2_layer, unet_3_layer, simple_unet
 
 from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers
@@ -58,11 +58,22 @@ input_layer = layers.Input(shape = (image_width, image_height, 3))
 
 print(" ")
 print("       Network Settings:")
-print("         * using UNet autoencoder design with %d layer depth" % (args.layers))
 print("         * initially %d filters used for CNNs" % (args.num_filters))
-print("         * classifier uses layers with %d and %d numbers of hidden nodes respctively" % (args.num_nodes,4*args.num_nodes))
+print("         * classifier uses layers with %d and %d numbers of hidden nodes respectively" % (4*args.num_nodes,args.num_nodes))
 
-net = unet_1_layer( input_layer, args.num_filters, args.num_nodes )
+if args.layers == 1:
+   print("         * using UNet autoencoder design with %d layer depth" % (args.layers))
+   net = unet_1_layer( input_layer, args.num_filters, args.num_nodes )
+elif args.layers == 2:
+   print("         * using UNet autoencoder design with %d layer depth" % (args.layers))
+   net = unet_2_layer( input_layer, args.num_filters, args.num_nodes )
+elif args.layers == 3:
+   print("         * using UNet autoencoder design with %d layer depth" % (args.layers))
+   net = unet_3_layer( input_layer, args.num_filters, args.num_nodes )
+else:
+   print("         * using simplified 1-layer UNet autoencoder design")
+   net = simple_unet( input_layer, args.num_filters, args.num_nodes )
+
 
 if ( args.num_gpus <= 1 ):
    model = models.Model(inputs=input_layer, outputs=net)

@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras import layers
-from tensorflow.keras.layers import BatchNormalization, Conv2D, Conv2DTranspose, MaxPooling2D, Dropout, Dense, Flatten
+from tensorflow.keras.layers import BatchNormalization, Conv2D, Conv2DTranspose, MaxPooling2D, Dropout, Dense, Flatten, UpSampling2D
 
 ##
 ## encoder_decoder 
@@ -20,31 +20,47 @@ from tensorflow.keras.layers import BatchNormalization, Conv2D, Conv2DTranspose,
 ## OUTPUT: net -> fully formed neural network
 ##
 
-def encoder_decoder( input_layer ):
+def encoder_decoder( input_layer, num_filters, num_nodes ):
 
-    # construct the encoding section of the neural network using CNNs and max pooling
-    num_filters = [128,64 ]
- 
-    net = BatchNormalization(axis=3)( input_layer )
-    for n in num_filters:
-        net = Conv2D( np.int32(n), 5, activation='relu', padding='same' )(net)
+#    net = BatchNormalization(axis=3)( input_layer )
+    net = input_layer
+    for n in range(3):
+        net = Conv2D( np.int32(num_filters), 5, activation='relu', padding='same' )(net)
         net = MaxPooling2D( 2 )(net)
+        num_filters *= 2
 
     # construct the decoding part of the neural network using transpose CNNs 
 
-    num_filters = [64,32] 
-    net = BatchNormalization(axis=3)(net)
-    for n in num_filters:
+#    net = BatchNormalization(axis=3)(net)
+    for n in range(2):
         net = Conv2DTranspose( np.int32(n), 5, padding='same', activation='relu' )(net)
+        num_filters *= 0.5 
 
     # add a multi-layer perceptron section for the image classification implementation
    
     net = Flatten()(net)
 
-    num_nodes = np.int32( max_hidden_nodes )
+    net = Dense( num_nodes, activation='relu' )(net)
+    net = Dense( num_nodes/2, activation='relu' )(net)
+    net = Dense( 4, activation='softmax' )(net)
+    return net
+
+def encoder_classifier( input_layer, num_filters ):
+
+    net = input_layer
+   
+    for i in range(5): 
+        net = Conv2D( num_filters, 5, activation='relu', padding='same' )(net)
+        net = MaxPooling2D( 2 )(net)
+
+    for i in range(5): 
+        net = UpSampling2D( 2 )(net)
+        net = Conv2D( num_filters, 5, activation='relu', padding='same' )(net)
+
+    net = Flatten()(net)
+
+    net = Dense( 1024, activation='relu' )(net)
     net = Dense( 64, activation='relu' )(net)
-    net = Dropout(0.2)(net)
-    net = Dense( 32, activation='relu' )(net)
     net = Dense( 4, activation='softmax' )(net)
     return net
 

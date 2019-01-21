@@ -24,15 +24,35 @@ def add_perceptron( net, num_nodes ):
 ## OUTPUT: net -> fully formed neural network
 ##
 
+def simple_unet( input_layer, num_filters, num_hidden_nodes ):
+
+    # construct the contracting path
+    cnv1 = Conv2D( num_filters, 3, activation='relu', padding='same' )(input_layer)
+    net = MaxPooling2D( 2 )(cnv1)
+
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
+
+    # construct the expansive path
+
+    net = UpSampling2D( 2 )(net)
+    net = concatenate( [net,cnv1], axis=3 )
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+
+    net = Conv2D( 2, 1, activation='relu', padding='same' )(net)
+
+    # add a multi-layer perceptron section for the image classification implementation
+    return add_perceptron( net, num_hidden_nodes )
+
 def unet_1_layer( input_layer, num_filters, num_hidden_nodes ):
 
     dropout_fraction = 0.3
 
     # construct the contracting path
 
-    net = BatchNormalization(axis=3)( input_layer )
+#    net = BatchNormalization(axis=3)( input_layer )
+    net = input_layer
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
-    net = Dropout(dropout_fraction)(net)
+#    net = Dropout(dropout_fraction)(net)
     cnv1 = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     net = MaxPooling2D( 2 )(cnv1)
 
@@ -42,9 +62,9 @@ def unet_1_layer( input_layer, num_filters, num_hidden_nodes ):
 
     net = UpSampling2D( 2 )(net)
     net = concatenate( [net,cnv1], axis=3 )
-    net = BatchNormalization(axis=3)( net )
+#    net = BatchNormalization(axis=3)( net )
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
-    net = Dropout(dropout_fraction)(net)
+#    net = Dropout(dropout_fraction)(net)
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
 
     net = Conv2D( 2, 1, activation='relu', padding='same' )(net)
