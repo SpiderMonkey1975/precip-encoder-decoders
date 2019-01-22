@@ -5,7 +5,7 @@ import sys, argparse
 from datetime import datetime
 
 from networks import unet
-from networks.unet import unet_1_layer, unet_2_layer, unet_3_layer, simple_unet
+from networks.unet import unet_1_layer, unet_2_layer, unet_3_layer, shallow_unet, deep_unet
 
 from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers
@@ -70,9 +70,12 @@ elif args.layers == 2:
 elif args.layers == 3:
    print("         * using UNet autoencoder design with %d layer depth" % (args.layers))
    net = unet_3_layer( input_layer, args.num_filters, args.num_nodes )
+elif args.layers == 4:
+   print("         * using 1-layer UNet autoencoder design with deepened layer")
+   net = deep_unet( input_layer, args.num_filters, args.num_nodes )
 else:
-   print("         * using simplified 1-layer UNet autoencoder design")
-   net = simple_unet( input_layer, args.num_filters, args.num_nodes )
+   print("         * using 1-layer UNet autoencoder design with shallow layer")
+   net = shallow_unet( input_layer, args.num_filters, args.num_nodes )
 
 
 if ( args.num_gpus <= 1 ):
