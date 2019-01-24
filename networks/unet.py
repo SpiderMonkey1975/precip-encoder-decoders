@@ -49,15 +49,18 @@ def deep_unet( input_layer, num_filters, num_hidden_nodes ):
 
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(input_layer)
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     cnv1 = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     net = MaxPooling2D( 2 )(cnv1)
 
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
     net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
 
     # construct the expansive path
 
     net = UpSampling2D( 2 )(net)
     net = concatenate( [net,cnv1], axis=3 )
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
     net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
@@ -94,7 +97,7 @@ def unet_1_layer( input_layer, num_filters, num_hidden_nodes ):
 
 def unet_2_layer( input_layer, num_filters, num_hidden_nodes ):
 
-    dropout_fraction = 0.2
+    dropout_fraction = 0.4
 
     # construct the contracting path 
 

@@ -29,9 +29,9 @@ parser.add_argument('-e', '--epochs', type=int, default=25, help="maximum number
 parser.add_argument('-b', '--batch_size', type=int, default=32, help="set batch size per GPU")
 parser.add_argument('-l', '--learn_rate', type=float, default=0.0001, help="set intial learning rate for optimizer")
 parser.add_argument('-v', '--variable', type=str, default='z', help="set variable to be used for training. Valid values are z, t, rh")
-parser.add_argument('-d', '--data', type=str, default='native', help="dataset type: native, au")
+parser.add_argument('-d', '--data', type=str, default='au', help="dataset type: native, au")
 parser.add_argument('-f', '--num_filters', type=int, default=32, help="number of filters used by the CNNs")
-parser.add_argument('-n', '--num_nodes', type=int, default=32, help="number of hidden nodes in last layer of classifier")
+parser.add_argument('-n', '--num_nodes', type=int, default=16, help="number of hidden nodes in last layer of classifier")
 parser.add_argument('-y', '--layers', type=int, default=1, help="number of layers to be used in U-Net autoencoder")
 args = parser.parse_args()
 
@@ -54,7 +54,7 @@ print("         * the ADAM optimizer with a learning rate of %6.4f will be used"
 
 image_width = 240
 image_height = 360
-input_layer = layers.Input(shape = (image_width, image_height, 3))
+input_layer = layers.Input(shape = (image_width, image_height, 1))
 
 print(" ")
 print("       Network Settings:")
@@ -95,9 +95,10 @@ model.compile( loss='categorical_crossentropy', optimizer=opt, metrics=['accurac
 ## 
 ## Load the training input data from disk
 ##
-
-inputfile = "input_data/training/" + args.variable + "_era5_" + args.data + "_CLASSIFICATION.npy"
+inputfile = "input_data/training/" + args.variable + "_era5_" + args.data + "_500hPa.npy"
 x_train = np.load( inputfile )
+x_train = np.expand_dims( x_train, axis=3 )
+
 
 inputfile = "input_data/training/" + args.data + "_one_hot_encoding.npy"
 y_train = np.load( inputfile )
@@ -112,8 +113,8 @@ y_train = y_train[ :num_images, : ]
 ##
 
 earlyStop = EarlyStopping( monitor='val_acc',
-                           min_delta=0.0005,
-                           patience=4,
+                           min_delta=0.0001,
+                           patience=5,
                            mode='max' )
 
 #modelSave = ModelCheckpoint( filepath='checkpoints/ERA5_weights_epoch{epoch:02d}.hdf5',
@@ -150,15 +151,16 @@ print("       Training time was", training_time)
 ## Load the test input data from disk
 ##
 
-inputfile = "input_data/test/" + args.variable + "_era5_" + args.data + "_CLASSIFICATION.npy"
+inputfile = "input_data/test/" + args.variable + "_era5_" + args.data + "_500hPa.npy"
 x_test = np.load( inputfile )
+x_test = np.expand_dims( x_test, axis=3 )
 
 inputfile = "input_data/test/" + args.data + "_one_hot_encoding.npy"
 y_test = np.load( inputfile )
 
 num_images = np.amin( [x_test.shape[0],y_test.shape[0]] )
 
-x_test = x_test[ :num_images, :image_width, :image_height, : ]
+x_test = x_raw[ :num_images, :image_width, :image_height, : ]
 y_test = y_test[ :num_images, : ]
 
 ##

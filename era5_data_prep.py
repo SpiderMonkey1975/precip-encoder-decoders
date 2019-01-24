@@ -48,22 +48,19 @@ for n in range( num_records ):
     # Class 1 - extreme rainfall events (over 30mm per hour)
     if val > limits[2]:
        one_hot_encoding[idx,0] = 1
-       idx = idx + 1
 
     # Class 2 - heavy rainfall events (between 30 and 15mm per hour)
-    if val > limits[1] and val <= limits[2]:
+    elif val > limits[1] and val <= limits[2]:
        one_hot_encoding[idx,1] = 1
-       idx = idx + 1
 
     # Class 3 - rainfall events (between 10 and 15mm per hour)
-    if val > limits[0] and val <= limits[1]:
+    elif val > limits[0] and val <= limits[1]:
        one_hot_encoding[idx,2] = 1
-       idx = idx + 1
 
     # Class 4 - insignificant or no rainfall events (under 10mm per hour)
-    if val <= limits[0]:
+    else:
        one_hot_encoding[idx,3] = 1
-       idx = idx + 1
+    idx = idx + 1
 print("           -> one-hot encoding completed")
 
 ##
@@ -84,9 +81,13 @@ for n in range( one_hot_encoding.shape[0] ):
            idx = idx + 1 
 
 np.random.shuffle( indicies )
+np.random.shuffle( indicies )
 
 training_indicies = indicies[ :30000 ]
+np.random.shuffle( training_indicies )
+
 test_indicies = indicies[ 30000: ]
+np.random.shuffle( test_indicies )
 print("           -> indicies selected")
 
 ##
@@ -101,6 +102,8 @@ filename = "input_data/test/" + args.data + "_one_hot_encoding.npy"
 test_set = one_hot_encoding[ training_indicies,: ]
 np.save( filename, test_set )
 print("           -> label data written to hard disk")
+print(" ")
+print(" ")
 
 ##
 ## Read in and process features data 
@@ -114,8 +117,9 @@ else:
    variables = ['z','t','rh']
    varnames = ['atmospheric pressure','atmospheric temperature','relative humidity']
 
+cnt = 0
 for var in variables:
-   print("           -> %s" % (var))
+   print("           -> %s" % (varnames[cnt]))
    filename = "/scratch/director2107/ERA5_Data/ERA5_Native/" + var + "_era5_" + args.data + ".npy"
    features_data = np.load( filename )
    print("              * data read from hard disk")
@@ -123,24 +127,30 @@ for var in variables:
    features_data = np.moveaxis(features_data, 1, 3)
    print("              * axis swap performed")
 
-   for n in range( features_data.shape[0] ):
-       mean_val = np.mean( features_data[n,:,:,:] )
-       std_dev = np.std( features_data[n,:,:,:] )
-       features_data[n,:,:,:] = (features_data[n,:,:,:] - mean_val) / std_dev
+   for i in range( 3 ):
+       for n in range( features_data.shape[0] ):
+           mean_val = np.mean( features_data[n,:,:,i] )
+           std_dev = np.std( features_data[n,:,:,i] )
+           features_data[n,:,:,i] = (features_data[n,:,:,i] - mean_val) / std_dev
    print("              * normalization completed")
+   cnt = cnt + 1
 
 ##
 ## Output processed features data to hard disk
 ##
 
+   levels = [500,800,1000]
+
    train_set = features_data[ training_indicies,:,:,: ]
    test_set = features_data[ test_indicies,:,:,: ]
    print("              * training/test set selection done")
 
-   filename = "input_data/training/" + var + "_era5_" + args.data + "_CLASSIFICATION.npy"
-   np.save( filename, train_set )
+   for i in range(3):
+       filename = "input_data/training/" + var + "_era5_" + args.data + "_" + str(levels[i]) + "hPa.npy"
+       np.save( filename, train_set[ :,:,:,i ] )
 
-   filename = "input_data/test/" + var + "_era5_" + args.data + "_CLASSIFICATION.npy"
-   np.save( filename, test_set )
+       filename = "input_data/test/" + var + "_era5_" + args.data + "_" + str(levels[i]) + "hPa.npy"
+       np.save( filename, test_set[ :,:,:,i ] )
    print("              * features data written to hard disk")
+   print(" ")
 print(" ")
