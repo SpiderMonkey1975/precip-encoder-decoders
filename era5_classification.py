@@ -4,14 +4,14 @@ import sys, argparse
 
 from datetime import datetime
 
-from networks import unet
-from networks.unet import unet_1_layer, unet_2_layer, unet_3_layer, shallow_unet, deep_unet
+from networks import simple
+from networks.simple import classifier
 
 from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import multi_gpu_model
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.callbacks import LearningRateScheduler, EarlyStopping, ModelCheckpoint
 
 print(" ")
 print(" ")
@@ -24,26 +24,19 @@ print("*========================================================================
 ##
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-g', '--num_gpus', type=int, default=4, help="number of GPUs to be used")
-parser.add_argument('-e', '--epochs', type=int, default=25, help="maximum number of epochs")
-parser.add_argument('-b', '--batch_size', type=int, default=32, help="set batch size per GPU")
+parser.add_argument('-e', '--epochs', type=int, default=50, help="maximum number of epochs")
+parser.add_argument('-b', '--batch_size', type=int, default=250, help="set batch size per GPU")
 parser.add_argument('-l', '--learn_rate', type=float, default=0.0001, help="set intial learning rate for optimizer")
-parser.add_argument('-v', '--variable', type=str, default='z', help="set variable to be used for training. Valid values are z, t, rh")
-parser.add_argument('-d', '--data', type=str, default='au', help="dataset type: native, au")
-parser.add_argument('-f', '--num_filters', type=int, default=32, help="number of filters used by the CNNs")
-parser.add_argument('-n', '--num_nodes', type=int, default=16, help="number of hidden nodes in last layer of classifier")
-parser.add_argument('-y', '--layers', type=int, default=1, help="number of layers to be used in U-Net autoencoder")
+parser.add_argument('-v', '--variable', type=str, default='rh', help="set variable to be used for training. Valid values are z, t, rh")
+parser.add_argument('-n', '--num_nodes', type=int, default=200, help="number of hidden nodes in last layer of classifier")
+parser.add_argument('-y', '--bins', type=int, default=4, help="number of bins")
+parser.add_argument('-x', '--levels', type=int, default=800, help="atmospheric pressure level used for input data. Valid values are 500, 800, 1000")
 args = parser.parse_args()
 
-if ( args.data == "native" ):
-   args.variable = 'z'
-
 print(" ")
-print(" ")
-print("       Starting %s run on %1d GPUS using %s precision" % (K.backend(),args.num_gpus,K.floatx()))
 print(" ")
 print("       Model Settings:")
-print("         * using ERA5-%s %s input" % (args.data,args.variable))
+print("         * using ERA5-Australia specific %s input at %d hPa level over %d bins" % (args.variable,args.levels,args.bins))
 print("         * model will run for %2d epochs" % (args.epochs))
 print("         * a batch size of %2d images per GPU will be employed" % (args.batch_size))
 print("         * the ADAM optimizer with a learning rate of %6.4f will be used" % (args.learn_rate))
@@ -58,32 +51,13 @@ input_layer = layers.Input(shape = (image_width, image_height, 1))
 
 print(" ")
 print("       Network Settings:")
-print("         * initially %d filters used for CNNs" % (args.num_filters))
-print("         * classifier uses layers with %d and %d numbers of hidden nodes respectively" % (4*args.num_nodes,args.num_nodes))
+print("         * using 3-layer classifier with %d, %d and %d numbers of hidden nodes" % (8*args.num_nodes,4*args.num_nodes,args.num_nodes))
 
-if args.layers == 1:
-   print("         * using UNet autoencoder design with %d layer depth" % (args.layers))
-   net = unet_1_layer( input_layer, args.num_filters, args.num_nodes )
-elif args.layers == 2:
-   print("         * using UNet autoencoder design with %d layer depth" % (args.layers))
-   net = unet_2_layer( input_layer, args.num_filters, args.num_nodes )
-elif args.layers == 3:
-   print("         * using UNet autoencoder design with %d layer depth" % (args.layers))
-   net = unet_3_layer( input_layer, args.num_filters, args.num_nodes )
-elif args.layers == 4:
-   print("         * using 1-layer UNet autoencoder design with deepened layer")
-   net = deep_unet( input_layer, args.num_filters, args.num_nodes )
-else:
-   print("         * using 1-layer UNet autoencoder design with shallow layer")
-   net = shallow_unet( input_layer, args.num_filters, args.num_nodes )
+net = classifier( input_layer, args.num_nodes, args.bins )
 
-
-if ( args.num_gpus <= 1 ):
-   model = models.Model(inputs=input_layer, outputs=net)
-else:
-   with tf.device("/cpu:0"):
-        model = models.Model(inputs=input_layer, outputs=net)
-   model = multi_gpu_model( model, gpus=args.num_gpus )
+with tf.device("/cpu:0"):
+     model = models.Model(inputs=input_layer, outputs=net)
+model = multi_gpu_model( model, gpus=4)
 
 ##
 ## Set the appropriate optimizer and loss function 
@@ -95,12 +69,12 @@ model.compile( loss='categorical_crossentropy', optimizer=opt, metrics=['accurac
 ## 
 ## Load the training input data from disk
 ##
-inputfile = "input_data/training/" + args.variable + "_era5_" + args.data + "_500hPa.npy"
+
+inputfile = "input_data/training/" + str(args.levels) + "hPa/" + args.variable + "_era5_au_" + str(args.bins) + "bins.npy"
 x_train = np.load( inputfile )
 x_train = np.expand_dims( x_train, axis=3 )
 
-
-inputfile = "input_data/training/" + args.data + "_one_hot_encoding.npy"
+inputfile = "input_data/training/au_labels_" + str(args.bins) + "bins.npy"
 y_train = np.load( inputfile )
 
 num_images = np.amin( [x_train.shape[0],y_train.shape[0]] )
@@ -109,22 +83,20 @@ x_train = x_train[ :num_images, :image_width, :image_height, : ]
 y_train = y_train[ :num_images, : ]
 
 ##
-## Set callbacks implemented during training 
+## Define the callbacks to be used in the model training
 ##
 
-earlyStop = EarlyStopping( monitor='val_acc',
-                           min_delta=0.0001,
-                           patience=5,
-                           mode='max' )
+def step_decay(epoch):
+    if epoch<11:
+       return args.learn_rate
+    elif epoch >= 11 and epoch < 30:
+       return args.learn_rate/2.0
+    else:
+       return args.learn_rate/5.0
 
-#modelSave = ModelCheckpoint( filepath='checkpoints/ERA5_weights_epoch{epoch:02d}.hdf5',
-#                             monitor='val_acc',
-#                             save_best_only=True,
-#                             mode='min',
-#                             period=5 )
-#                             
-#my_callbacks = [earlyStop, modelSave]
-my_callbacks = [earlyStop]
+lrate = LearningRateScheduler(step_decay)
+earlystopper = EarlyStopping( monitor='val_acc', patience=25 )
+#checkpointer = ModelCheckpoint(filepath='checkpoints/bestmodel_' + args.variable + "_" + str(args.bins) + "bins.hdf5", save_best_only=True)
 
 ##
 ## Train model.  Only output information for the validation steps only.
@@ -137,12 +109,13 @@ print("*------------------------------------------------------------------------
 
 t1 = datetime.now()
 history = model.fit( x=x_train, y=y_train, 
-                     batch_size=args.batch_size*args.num_gpus, 
+                     batch_size=args.batch_size*4, 
                      epochs=args.epochs, 
                      verbose=2,
                      shuffle=True, 
-                     validation_split=0.2,
-                     callbacks=my_callbacks )
+                     validation_split=0.25,
+                     callbacks=[lrate,earlystopper] )
+                   #  callbacks=[lrate,earlystopper,checkpointer] )
 training_time = datetime.now() - t1
 print(" ")
 print("       Training time was", training_time)
@@ -151,16 +124,16 @@ print("       Training time was", training_time)
 ## Load the test input data from disk
 ##
 
-inputfile = "input_data/test/" + args.variable + "_era5_" + args.data + "_500hPa.npy"
+inputfile = "input_data/test/" + str(args.levels) + "hPa/" + args.variable + "_era5_au_" + str(args.bins) + "bins.npy"
 x_test = np.load( inputfile )
 x_test = np.expand_dims( x_test, axis=3 )
 
-inputfile = "input_data/test/" + args.data + "_one_hot_encoding.npy"
+inputfile = "input_data/test/au_labels_" + str(args.bins) + "bins.npy"
 y_test = np.load( inputfile )
 
 num_images = np.amin( [x_test.shape[0],y_test.shape[0]] )
 
-x_test = x_raw[ :num_images, :image_width, :image_height, : ]
+x_test = x_test[ :num_images, :image_width, :image_height, : ]
 y_test = y_test[ :num_images, : ]
 
 ##
@@ -174,7 +147,7 @@ print("*------------------------------------------------------------------------
 
 t1 = datetime.now()
 score = model.evaluate( x=x_test, y=y_test, 
-                        batch_size=args.batch_size*args.num_gpus,
+                        batch_size=args.batch_size*4,
                         verbose=0 )
 prediction_time = datetime.now() - t1
 print("       Test on %s samples, Accuracy of %4.3f"  % (num_images,score[1]))

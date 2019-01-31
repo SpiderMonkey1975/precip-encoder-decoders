@@ -64,3 +64,17 @@ def encoder_classifier( input_layer, num_filters ):
     net = Dense( 4, activation='softmax' )(net)
     return net
 
+def classifier( input_layer, num_nodes, num_bins ):
+    
+    dropout_ratio = 0.4
+
+    net = Flatten()(input_layer)
+    net = Dense( 8*num_nodes, activation='relu' )(net)
+    net = Dropout(dropout_ratio)(net)
+    net = Dense( 4*num_nodes, activation='relu' )(net)
+    net = Dropout(dropout_ratio)(net)
+    net = Dense( 2*num_nodes, activation='relu' )(net)
+    net = Dropout(dropout_ratio)(net)
+    net = Dense( num_nodes, activation='relu' )(net)
+    return Dense( num_bins, activation='softmax' )(net)
+

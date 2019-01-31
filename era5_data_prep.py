@@ -9,97 +9,92 @@ print("*========================================================================
 print(" ")
 
 ##
-## User selected Native or Australian region-specific data
+## Parse any user given commandline arguments 
 ##
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data', type=str, default='au', help="dataset type: native, au")
+parser.add_argument('-n', '--num_bins', type=int, default=4, help="number of rainfall classification bins")
 args = parser.parse_args()
 
-if args.data == "native":
-   limits = [5.18112,6.6853,8.922]
-   print("      working on global ERA5 data")
-else:
-   limits = [14.7539,19.222,23.9865]
-   print("      working on Australia-specific ERA5 data")
+if args.data != "au" and args.data != "native":
+   args.data = "au"
+
+if args.num_bins<2:
+   args.num_bins = 2
+elif args.num_bins>6:
+   args.num_bins = 6
+
+print("      splitting ERA5-%s data into %d bins" % (args.data,args.num_bins))
 print(" ")
+
+#if args.data == "native":
+#   limits = [5.18112,6.6853,8.922]
+#else:
+#   limits = [14.7539,19.222,23.9865]
 
 ##
 ## Read in total precipatation data
 ##
 
 filename = "/scratch/director2107/ERA5_Data/ERA5_Native/tp_era5_" + args.data + ".npy"
-precip_data = 1000.0 * np.load( filename )
+precip_data = np.load( filename )
 print("      STATUS:")
-print("      [1/2] precipitation data read")
-print("           -> total precipitation data read")
+print("      [1/2] precipitation data preparation")
+print("           -> raw data read")
 
 ##
-## Generate labels array(s)
+## Determine maximum precipatation value for every record
 ##
 
 num_records = precip_data.shape[0]
-one_hot_encoding = np.zeros((num_records,4), dtype=int)
+max_precip_vals = np.empty((num_records,), dtype=float)
 
-idx = 0
 for n in range( num_records ):
-    val = np.amax(precip_data[n,:,:])
+    max_precip_vals[n] = np.amax(precip_data[n,:,:]) 
 
-    # Class 1 - extreme rainfall events (over 30mm per hour)
-    if val > limits[2]:
-       one_hot_encoding[idx,0] = 1
+indicies = np.argsort( max_precip_vals )
 
-    # Class 2 - heavy rainfall events (between 30 and 15mm per hour)
-    elif val > limits[1] and val <= limits[2]:
-       one_hot_encoding[idx,1] = 1
+##
+## Generate an one-hot encoding for the precipatation data 
+##
 
-    # Class 3 - rainfall events (between 10 and 15mm per hour)
-    elif val > limits[0] and val <= limits[1]:
-       one_hot_encoding[idx,2] = 1
+records_per_bin = int(np.floor( num_records/args.num_bins ))
+num_records = int(records_per_bin*args.num_bins)
 
-    # Class 4 - insignificant or no rainfall events (under 10mm per hour)
-    else:
-       one_hot_encoding[idx,3] = 1
-    idx = idx + 1
+one_hot_encoding = np.zeros((num_records,args.num_bins), dtype=int)
+
+
+for i in range(args.num_bins):
+    for j in range(records_per_bin):
+        idx = indicies[ i*records_per_bin + j ]
+        one_hot_encoding[idx,i] = 1
 print("           -> one-hot encoding completed")
 
 ##
-## Select the same number of rainfall class instances for the image recognition 
+## Generate index sets for the traininig and test data sets 
 ##
 
-num_records = np.min( np.sum(one_hot_encoding,axis=0) )
-
-cnt = np.zeros( 4, dtype=int )
-indicies = np.empty( 4*num_records, dtype=int )
-
-idx = 0
-for n in range( one_hot_encoding.shape[0] ):
-    for i in range( 4 ):
-        if one_hot_encoding[n,i] == 1 and cnt[i] < num_records:
-           cnt[i] = cnt[i] + 1
-           indicies[idx] = n
-           idx = idx + 1 
-
-np.random.shuffle( indicies )
+indicies = np.empty((num_records,), dtype=int)
+for i in range(num_records):
+    indicies[i] = i
 np.random.shuffle( indicies )
 
 training_indicies = indicies[ :30000 ]
-np.random.shuffle( training_indicies )
-
 test_indicies = indicies[ 30000: ]
-np.random.shuffle( test_indicies )
 print("           -> indicies selected")
 
 ##
 ## Output label data to hard disk
 ##
-       
-filename = "input_data/training/" + args.data + "_one_hot_encoding.npy"
+
+varname = args.data + "_labels_" + str(args.num_bins) + "bins.npy"       
+filename = "input_data/training/" + varname
 train_set = one_hot_encoding[ training_indicies,: ]
 np.save( filename, train_set )
 
-filename = "input_data/test/" + args.data + "_one_hot_encoding.npy"
-test_set = one_hot_encoding[ training_indicies,: ]
+filename = "input_data/test/" + varname
+test_set = one_hot_encoding[ test_indicies,: ]
 np.save( filename, test_set )
 print("           -> label data written to hard disk")
 print(" ")
@@ -146,10 +141,11 @@ for var in variables:
    print("              * training/test set selection done")
 
    for i in range(3):
-       filename = "input_data/training/" + var + "_era5_" + args.data + "_" + str(levels[i]) + "hPa.npy"
+       varname = var + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy"
+       filename = "input_data/training/"  + str(levels[i]) + "hPa/"+ varname
        np.save( filename, train_set[ :,:,:,i ] )
 
-       filename = "input_data/test/" + var + "_era5_" + args.data + "_" + str(levels[i]) + "hPa.npy"
+       filename = "input_data/test/"  + str(levels[i]) + "hPa/"+ varname
        np.save( filename, test_set[ :,:,:,i ] )
    print("              * features data written to hard disk")
    print(" ")
