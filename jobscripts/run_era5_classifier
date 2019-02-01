@@ -4,12 +4,11 @@
 
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
-#SBATCH --time=08:30:00
+#SBATCH --time=04:00:00
 #SBATCH --partition=gpuq
 #SBATCH --job-name=ERA5_Classifier
 #SBATCH --account=director2107
 #SBATCH --export=NONE
-
 
 # Set the name of the python script to be ran and the container image we will load/run
 
@@ -18,14 +17,15 @@ CONTAINER=tensorflow/tensorflow:1.12.0-gpu-py3
 
 # Set values to the configurable hyperparameters in the ML script
 
-EPOCHS=100
-BATCH_SIZE=8
+EPOCHS=1000
+BATCH_SIZE=250
 LEARN_RATE=0.0001
-VARIABLE=z
-DATASET=au
-NUM_FILTERS=16
-NUM_HIDDEN_NODES=16
-NUM_UNET_LAYERS=1
+VARIABLE=rh
+NUM_HIDDEN_NODES=50
+NUM_BINS=6
+PRESSURE_LEVEL=800
+REGULARIZATION_CONSTANT=0.05
+DROPOUT_FRACTION=0.4
 
 ##====================================================================================================
 ##---------------------------    Do not change anything below this line    ---------------------------
@@ -35,8 +35,5 @@ NUM_UNET_LAYERS=1
 module load shifter
 export RUN_CMD="shifter run ${CONTAINER} python"
 
-# determine number of GPUs present in SLURM allocation
-IFS=',' read -ra gpus <<< "$CUDA_VISIBLE_DEVICES"
-
-time srun -n 1 --export=ALL -u ${RUN_CMD} ${ML_SCRIPT} -e ${EPOCHS} -b ${BATCH_SIZE} -g ${#gpus[@]} -l ${LEARN_RATE} -v ${VARIABLE} -d ${DATASET} -f ${NUM_FILTERS} -n ${NUM_HIDDEN_NODES} -y ${NUM_UNET_LAYERS}
+time srun -n 1 --export=ALL -u ${RUN_CMD} ${ML_SCRIPT} -e ${EPOCHS} -b ${BATCH_SIZE} -l ${LEARN_RATE} -v ${VARIABLE} -n ${NUM_HIDDEN_NODES} -y ${NUM_BINS} -x ${PRESSURE_LEVEL} -d ${DROPOUT_FRACTION} -r ${REGULARIZATION_CONSTANT}
 

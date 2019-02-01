@@ -1,15 +1,18 @@
 #!/bin/bash
 
-levels=('800')
-num_bins=('4' '6')
+hidden_node_counts=('25' '50' '100')
+dropout_fractions=('0.2' '0.3')
+learn_rates=('0.0001' '0.00001')
 
-input_file="jobscripts/run_era5_classifier_pascal"
+input_file="jobscripts/run_era5_classifier"
 
 cnt=0
-for lev in "${levels[@]}"
+for nodes in "${hidden_node_counts[@]}"
 do
-    for bin in "${num_bins[@]}"
-    do
+    for fraction in "${dropout_fractions[@]}"
+        do
+        for lrate in "${learn_rates[@]}"
+        do
             output_file="jobscript_${cnt}"
             if [ -e $output_file ]
             then
@@ -17,17 +20,21 @@ do
             fi
    
             while read LINE; do
-                  if echo $LINE | grep -q "PRESSURE_LEVEL="; then
-                     LINE="PRESSURE_LEVEL=$lev" 
+                  if echo $LINE | grep -q "DROPOUT_FRACTION="; then
+                     LINE="DROPOUT_FRACTION=$fraction" 
                   fi
-                  if echo $LINE | grep -q "NUM_BINS="; then
-                     LINE="NUM_BINS=$bin" 
+                  if echo $LINE | grep -q "LEARN_RATE="; then
+                     LINE="LEARN_RATE=$lrate" 
+                  fi
+                  if echo $LINE | grep -q "NUM_HIDDEN_NODES="; then
+                     LINE="NUM_HIDDEN_NODES=$nodes" 
                   fi
                   echo $LINE >> $output_file
             done < $input_file
 
             sbatch $output_file
             cnt=$((cnt+1))
-   done
+        done
+    done
 done
 
