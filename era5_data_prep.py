@@ -28,11 +28,6 @@ elif args.num_bins>6:
 print("      splitting ERA5-%s data into %d bins" % (args.data,args.num_bins))
 print(" ")
 
-#if args.data == "native":
-#   limits = [5.18112,6.6853,8.922]
-#else:
-#   limits = [14.7539,19.222,23.9865]
-
 ##
 ## Read in total precipatation data
 ##
@@ -64,6 +59,21 @@ num_records = int(records_per_bin*args.num_bins)
 
 one_hot_encoding = np.zeros((num_records,args.num_bins), dtype=int)
 
+bin_vals = np.empty((args.num_bins), dtype=float)
+
+print("      Bin Values:")
+idx = 0
+n = records_per_bin - 1
+for i in range(args.num_bins):
+    bin_vals[i] = 1000*max_precip_vals[indicies[idx]]
+    print( "          %3.0f - %3.0f mm" % (bin_vals[i],1000*max_precip_vals[indicies[n]]))
+    idx = idx + records_per_bin
+    n = n + records_per_bin
+
+filename = "input_data/rainfall_maxvals_" + str(args.num_bins) + "bins.npy"
+np.save( filename, bin_vals )
+
+sys.exit(0)
 
 for i in range(args.num_bins):
     for j in range(records_per_bin):

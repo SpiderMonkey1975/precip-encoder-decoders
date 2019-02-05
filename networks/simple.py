@@ -23,14 +23,19 @@ from tensorflow.keras.regularizers import l1, l2
 ## OUTPUT: net -> fully formed neural network
 ##
 
-def classifier( input_layer, num_nodes, num_bins, dropout_ratio, reg_constant ):
+def classifier( input_layer, num_nodes, num_bins, dropout_ratio, reg_constant, num_layers ):
     
     net = Flatten()(input_layer)
 
-    net = Dense( 8*num_nodes, activation='relu', kernel_regularizer=l2(reg_constant) )(net)
-    net = Dropout(dropout_ratio)(net)
-    net = Dense( 4*num_nodes, activation='relu', kernel_regularizer=l2(reg_constant) )(net)
-    net = Dropout(dropout_ratio)(net)
-    net = Dense( num_nodes, activation='relu', kernel_regularizer=l2(reg_constant) )(net)
+    factor = 8
+    for n in range(num_layers-1):
+        net = Dense( factor*num_nodes, activation='relu', kernel_regularizer=l2(reg_constant) )(net)
+        net = Dropout(dropout_ratio)(net)
+        factor = factor / 2
+        if factor<1:
+           factor = 1
+#    net = Dense( 4*num_nodes, activation='relu', kernel_regularizer=l2(reg_constant) )(net)
+ #   net = Dropout(dropout_ratio)(net)
+#    net = Dense( num_nodes, activation='relu', kernel_regularizer=l2(reg_constant) )(net)
     return Dense( num_bins, activation='softmax' )(net)
 

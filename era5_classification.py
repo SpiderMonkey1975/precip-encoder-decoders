@@ -33,6 +33,7 @@ parser.add_argument('-y', '--bins', type=int, default=6, help="number of bins")
 parser.add_argument('-x', '--levels', type=int, default=800, help="atmospheric pressure level used for input data. Valid values are 500, 800, 1000")
 parser.add_argument('-r', '--reg_constant', type=float, default=0.05, help="set L2 regularization constant")
 parser.add_argument('-d', '--dropout', type=float, default=0.3, help="set dropout fraction")
+parser.add_argument('-z', '--layers', type=int, default=3, help="set nnumber of layers in classifier")
 args = parser.parse_args()
 
 print(" ")
@@ -59,7 +60,7 @@ num_gpus = 1
 ##
 
 input_layer = layers.Input(shape = (image_width, image_height, 1))
-net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.reg_constant )
+net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.reg_constant, args.layers )
 
 if num_gpus>1:
    with tf.device("/cpu:0"):
@@ -96,14 +97,16 @@ y_train = y_train[ :num_images, : ]
 ##
 
 def step_decay(epoch):
-    if epoch<19:
+    if epoch<=25:
        return args.learn_rate
+    elif epoch>25 and epoch<=50:
+       return args.learn_rate / 10.0
     else:
-       return args.learn_rate/10.0
+       return args.learn_rate/100.0
 
 lrate = LearningRateScheduler( step_decay )
 earlystopper = EarlyStopping( monitor='val_acc', 
-                              patience=25 )
+                              patience=10 )
 checkpointer = ModelCheckpoint( filepath='checkpoints/bestmodel_' + args.variable + "_" + str(args.bins) + "bins.hdf5", 
                                 save_best_only=True,
                                 period=5 )
@@ -122,9 +125,9 @@ history = model.fit( x=x_train, y=y_train,
                      batch_size=args.batch_size*num_gpus, 
                      epochs=args.epochs, 
                      verbose=2,
-                     shuffle=True, 
-                     validation_split=0.25,
-                     callbacks=[earlystopper] )
+                     shuffle=False, 
+                     validation_split=0.25, 
+                     callbacks=[lrate] )
 training_time = datetime.now() - t1
 print(" ")
 print("       Training time was", training_time)
@@ -160,6 +163,7 @@ score = model.evaluate( x=x_test, y=y_test,
                         verbose=0 )
 prediction_time = datetime.now() - t1
 print("       Test on %s samples, Accuracy of %4.3f"  % (num_images,score[1]))
+print( score )
 print("       Prediction time was", prediction_time)
 print(" ")
 
