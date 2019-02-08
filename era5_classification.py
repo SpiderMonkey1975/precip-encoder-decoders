@@ -4,13 +4,13 @@ import sys, argparse
 
 from datetime import datetime
 
-from networks import simple
+from networks import simple, transfer
 from networks.simple import classifier
+from networks.transfer import transfer_learning
 
 from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.utils import multi_gpu_model
 from tensorflow.keras.callbacks import LearningRateScheduler, EarlyStopping, ModelCheckpoint
 
 print(" ")
@@ -53,21 +53,16 @@ print("         * using 3-layer classifier with %d, %d and %d numbers of hidden 
 
 image_width = 240
 image_height = 360
-num_gpus = 1
 
 ##
 ## Construct the neural network 
 ##
 
 input_layer = layers.Input(shape = (image_width, image_height, 1))
-net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.reg_constant, args.layers )
+#net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.reg_constant, args.layers )
+net = transfer_learning( 0, input_layer, args.num_nodes )
 
-if num_gpus>1:
-   with tf.device("/cpu:0"):
-        model = models.Model(inputs=input_layer, outputs=net)
-   model = multi_gpu_model( model, gpus=num_gpus)
-else:
-   model = models.Model(inputs=input_layer, outputs=net)
+model = models.Model(inputs=input_layer, outputs=net)
 
 ##
 ## Set the appropriate optimizer and loss function 
