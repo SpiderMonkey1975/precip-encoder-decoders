@@ -1,4 +1,4 @@
-import argparse, sys
+import argparse
 import numpy as np
 
 print(" ")
@@ -25,11 +25,28 @@ if args.num_bins<2:
 elif args.num_bins>6:
    args.num_bins = 6
 
-print("      splitting ERA5-%s data into %d bins" % (args.data,args.num_bins))
+##
+## Set some important parameters
+##
+
+image_width = 240
+image_height = 360
+num_training_images = 30000
+num_test_images = 648
+levels = [500,800,1000]
+
+if args.data == "native":
+   variables = ['z']
+   varnames = ['atmospheric pressure']
+   print("      splitting global ERA5 data into %d bins" % (args.num_bins))
+else:
+   variables = ['z','t','rh']
+   varnames = ['atmospheric pressure','atmospheric temperature','relative humidity']
+   print("      splitting ERA5 Australia-specific data into %d bins" % (args.num_bins))
 print(" ")
 
 ##
-## Read in total precipatation data
+## Read in total precipitation data
 ##
 
 filename = "/scratch/director2107/ERA5_Data/ERA5_Native/tp_era5_" + args.data + ".npy"
@@ -39,7 +56,7 @@ print("      [1/2] precipitation data preparation")
 print("           -> raw data read")
 
 ##
-## Determine maximum precipatation value for every record
+## Determine maximum precipitation value for every record
 ##
 
 num_records = precip_data.shape[0]
@@ -51,7 +68,7 @@ for n in range( num_records ):
 indicies = np.argsort( max_precip_vals )
 
 ##
-## Generate an one-hot encoding for the precipatation data 
+## Generate an one-hot encoding for the precipitation data 
 ##
 
 records_per_bin = int(np.floor( num_records/args.num_bins ))
@@ -70,11 +87,6 @@ for i in range(args.num_bins):
     idx = idx + records_per_bin
     n = n + records_per_bin
 
-filename = "input_data/rainfall_maxvals_" + str(args.num_bins) + "bins.npy"
-np.save( filename, bin_vals )
-
-sys.exit(0)
-
 for i in range(args.num_bins):
     for j in range(records_per_bin):
         idx = indicies[ i*records_per_bin + j ]
@@ -90,8 +102,8 @@ for i in range(num_records):
     indicies[i] = i
 np.random.shuffle( indicies )
 
-training_indicies = indicies[ :30000 ]
-test_indicies = indicies[ 30000: ]
+training_indicies = indicies[ :num_training_images ]
+test_indicies = indicies[ num_training_images: ]
 print("           -> indicies selected")
 
 ##
@@ -99,11 +111,11 @@ print("           -> indicies selected")
 ##
 
 varname = args.data + "_labels_" + str(args.num_bins) + "bins.npy"       
-filename = "input_data/training/" + varname
+filename = "../input_data/training/" + varname
 train_set = one_hot_encoding[ training_indicies,: ]
 np.save( filename, train_set )
 
-filename = "input_data/test/" + varname
+filename = "../input_data/test/" + varname
 test_set = one_hot_encoding[ test_indicies,: ]
 np.save( filename, test_set )
 print("           -> label data written to hard disk")
@@ -115,12 +127,6 @@ print(" ")
 ##
 
 print("      [2/2] processing features data")
-if args.data == "native":
-   variables = ['z']
-   varnames = ['atmospheric pressure']
-else:
-   variables = ['z','t','rh']
-   varnames = ['atmospheric pressure','atmospheric temperature','relative humidity']
 
 cnt = 0
 for var in variables:
@@ -132,7 +138,7 @@ for var in variables:
    features_data = np.moveaxis(features_data, 1, 3)
    print("              * axis swap performed")
 
-   for i in range( 3 ):
+   for i in range( len(levels) ):
        for n in range( features_data.shape[0] ):
            mean_val = np.mean( features_data[n,:,:,i] )
            std_dev = np.std( features_data[n,:,:,i] )
@@ -144,19 +150,11 @@ for var in variables:
 ## Output processed features data to hard disk
 ##
 
-   levels = [500,800,1000]
+   filename = "../input_data/training/" + var + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy" 
+   np.save( filename, features_data[ training_indicies,:,:,: ] )
 
-   train_set = features_data[ training_indicies,:,:,: ]
-   test_set = features_data[ test_indicies,:,:,: ]
-   print("              * training/test set selection done")
-
-   for i in range(3):
-       varname = var + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy"
-       filename = "input_data/training/"  + str(levels[i]) + "hPa/"+ varname
-       np.save( filename, train_set[ :,:,:,i ] )
-
-       filename = "input_data/test/"  + str(levels[i]) + "hPa/"+ varname
-       np.save( filename, test_set[ :,:,:,i ] )
+   filename = "../input_data/test/" + var + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy" 
+   np.save( filename, features_data[ test_indicies,:,:,: ] )
    print("              * features data written to hard disk")
    print(" ")
 print(" ")
