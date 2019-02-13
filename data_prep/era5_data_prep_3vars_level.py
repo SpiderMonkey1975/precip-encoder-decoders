@@ -45,19 +45,19 @@ for n in range( len(levels) ):
     
     features_data = np.empty((num_training_images,image_width,image_height,len(variables)), dtype=np.float)
     for i in range( len(variables) ):
-        filename = "../input_data/training/" + str(levels[n]) + "hPa/"  + variables[i] + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy"
+        filename = "../input_data/training/" + str(levels[n]) + "hPa/"  + variables[i] + "_era5_au_" + str(args.num_bins) + "bins.npy"
         features_data[ :,:,:,i ] = np.load( filename )
 
-    filename = "../input_data/training/era5_" + args.data + "_" + str(args.num_bins) + "bins.npy"
+    filename = "../input_data/training/era5_au_" + str(args.num_bins) + "bins.npy"
     np.save( filename, features_data )
 
     print("      collecting test variable data for %d hPa pressure level" % (levels[n]))
     features_data = np.empty((num_test_images,image_width,image_height,len(variables)), dtype=np.float)
     for i in range( len(variables) ):
-        filename = "../input_data/test/" + str(levels[n]) + "hPa/"  + variables[i] + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy"
+        filename = "../input_data/test/" + str(levels[n]) + "hPa/"  + variables[i] + "_era5_au_" + str(args.num_bins) + "bins.npy"
         features_data[ :,:,:,i ] = np.load( filename )
 
-    filename = "../input_data/test/era5_" + args.data + "_" + str(args.num_bins) + "bins.npy"
+    filename = "../input_data/test/era5_au_" + str(args.num_bins) + "bins.npy"
     np.save( filename, features_data )
     print(" ")
 
