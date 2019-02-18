@@ -4,7 +4,7 @@
 
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --partition=gpuq
 #SBATCH --job-name=ERA5_Classifier
 #SBATCH --account=director2107
@@ -12,7 +12,7 @@
 
 # Set the name of the python script to be ran and the container image we will load/run
 
-ML_SCRIPT=era5_single_var_single_lev.py
+ML_SCRIPT=era5_3var_per_level.py
 CONTAINER=tensorflow/tensorflow:1.12.0-gpu-py3
 
 # Set values to the configurable hyperparameters in the ML script
@@ -20,7 +20,6 @@ CONTAINER=tensorflow/tensorflow:1.12.0-gpu-py3
 EPOCHS=100
 BATCH_SIZE=250
 LEARN_RATE=0.00001
-VARIABLE=rh
 NUM_HIDDEN_NODES=50
 NUM_BINS=6
 PRESSURE_LEVEL=800
@@ -34,5 +33,5 @@ DROPOUT_FRACTION=0.3
 module load shifter
 export RUN_CMD="shifter run ${CONTAINER} python"
 
-time srun -n 1 --export=ALL -u ${RUN_CMD} ${ML_SCRIPT} -e ${EPOCHS} -b ${BATCH_SIZE} -l ${LEARN_RATE} -v ${VARIABLE} -n ${NUM_HIDDEN_NODES} -y ${NUM_BINS} -x ${PRESSURE_LEVEL} -d ${DROPOUT_FRACTION} 
+time srun -n 1 --export=ALL -u ${RUN_CMD} ${ML_SCRIPT} -e ${EPOCHS} -b ${BATCH_SIZE} -l ${LEARN_RATE} -n ${NUM_HIDDEN_NODES} -y ${NUM_BINS} -x ${PRESSURE_LEVEL} -d ${DROPOUT_FRACTION} 
 

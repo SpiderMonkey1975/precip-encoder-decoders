@@ -4,13 +4,12 @@ import sys, argparse
 
 from datetime import datetime
 
-from networks import simple
-from networks.simple import classifier
+from neural_nets import classifier
 
 from tensorflow.keras import backend as K
-from tensorflow.keras import models, layers
+from tensorflow.keras import models, layers, callbacks
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import LearningRateScheduler, EarlyStopping, ModelCheckpoint
+from tensorflow.keras.callbacks import ModelCheckpoint
 
 print(" ")
 print(" ")
@@ -19,7 +18,7 @@ print("*                                         RAINFALL CLASSIFIER            
 print("*===================================================================================================*")
 
 ##
-## Look for any user specified commandline arguments
+## Look for any user specifiedme = "../model_backups/model_weights_" + args.variable + "_" + str(args.levels) + "hPa.h5"
 ##
 
 parser = argparse.ArgumentParser()
@@ -30,7 +29,6 @@ parser.add_argument('-v', '--variable', type=str, default='rh', help="set variab
 parser.add_argument('-n', '--num_nodes', type=int, default=50, help="number of hidden nodes in last layer of classifier")
 parser.add_argument('-y', '--bins', type=int, default=6, help="number of bins")
 parser.add_argument('-x', '--levels', type=int, default=800, help="atmospheric pressure level used for input data. Valid values are 500, 800, 1000")
-parser.add_argument('-r', '--reg_constant', type=float, default=0.05, help="set L2 regularization constant")
 parser.add_argument('-d', '--dropout', type=float, default=0.3, help="set dropout fraction")
 parser.add_argument('-z', '--layers', type=int, default=3, help="set number of layers in classifier")
 args = parser.parse_args()
@@ -43,7 +41,6 @@ print("         * model will run for %2d epochs" % (args.epochs))
 print("         * a batch size of %2d images per GPU will be employed" % (args.batch_size))
 print("         * the ADAM optimizer with a learning rate of %6.4f will be used" % (args.learn_rate))
 print("         * dropout ratio is %f" % (args.dropout))
-print("         * L2 regularization enabled with constant of %f used" % (args.reg_constant))
 print("         * using 3-layer classifier with %d, %d and %d numbers of hidden nodes" % (8*args.num_nodes,4*args.num_nodes,args.num_nodes))
 
 ##
@@ -58,7 +55,7 @@ image_height = 360
 ##
 
 input_layer = layers.Input(shape = (image_width, image_height, 1))
-net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.reg_constant, args.layers )
+net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.layers )
 
 model = models.Model(inputs=input_layer, outputs=net)
 
@@ -73,36 +70,17 @@ model.compile( loss='categorical_crossentropy', optimizer=opt, metrics=['accurac
 ## Load the training input data from disk
 ##
 
-inputfile = "input_data/training/" + str(args.levels) + "hPa/" + args.variable + "_era5_au_" + str(args.bins) + "bins.npy"
+inputfile = "../input_data/training/" + str(args.levels) + "hPa/" + args.variable + "_era5_au_" + str(args.bins) + "bins.npy"
 x_train = np.load( inputfile )
 x_train = np.expand_dims( x_train, axis=3 )
 
-inputfile = "input_data/training/au_labels_" + str(args.bins) + "bins.npy"
+inputfile = "../input_data/training/au_labels_" + str(args.bins) + "bins.npy"
 y_train = np.load( inputfile )
 
 num_images = np.amin( [x_train.shape[0],y_train.shape[0]] )
 
 x_train = x_train[ :num_images, :image_width, :image_height, : ]
 y_train = y_train[ :num_images, : ]
-
-##
-## Define the callbacks to be used in the model training
-##
-
-def step_decay(epoch):
-    if epoch<=25:
-       return args.learn_rate
-    elif epoch>25 and epoch<=50:
-       return args.learn_rate / 10.0
-    else:
-       return args.learn_rate/100.0
-
-lrate = LearningRateScheduler( step_decay )
-earlystopper = EarlyStopping( monitor='val_acc', 
-                              patience=10 )
-checkpointer = ModelCheckpoint( filepath='checkpoints/bestmodel_' + args.variable + "_" + str(args.bins) + "bins.hdf5", 
-                                save_best_only=True,
-                                period=5 )
 
 ##
 ## Train model.  Only output information for the validation steps only.
@@ -113,26 +91,44 @@ print(" ")
 print("                                       Model Training Output")
 print("*---------------------------------------------------------------------------------------------------*")
 
+filename = "../model_backups/model_weights_" + args.variable + "_" + str(args.levels) + "hPa.h5"
+checkpoint = ModelCheckpoint( filename, monitor='val_acc', verbose=0, save_best_only=True, mode='max' )
+my_callbacks = [checkpoint]
+
 t1 = datetime.now()
 history = model.fit( x=x_train, y=y_train, 
                      batch_size=args.batch_size, 
                      epochs=args.epochs, 
                      verbose=2,
-                     shuffle=False, 
-                     validation_split=0.25 )
+                     shuffle=False,
+                     callbacks=my_callbacks, 
+                     validation_split=0.16 )
 training_time = datetime.now() - t1
 print(" ")
 print("       Training time was", training_time)
+
+sys.exit(0)
+
+##
+## Save the model and weights to hard disk
+##
+
+#filename = "../model_backups/model_weights_" + args.variable + "_" + str(args.levels) + "hPa.h5"
+#model.save_weights( "model_weights.h5" )
+
+#filename = "../model_backups/model_architecture_" + args.variable + "_" + str(args.levels) + "_hPa.json"
+#with open( filename ) as f:
+#     f.write( model.to.json() )
 
 ## 
 ## Load the test input data from disk
 ##
 
-inputfile = "input_data/test/" + str(args.levels) + "hPa/" + args.variable + "_era5_au_" + str(args.bins) + "bins.npy"
+inputfile = "../input_data/test/" + str(args.levels) + "hPa/" + args.variable + "_era5_au_" + str(args.bins) + "bins.npy"
 x_test = np.load( inputfile )
 x_test = np.expand_dims( x_test, axis=3 )
 
-inputfile = "input_data/test/au_labels_" + str(args.bins) + "bins.npy"
+inputfile = "../input_data/test/au_labels_" + str(args.bins) + "bins.npy"
 y_test = np.load( inputfile )
 
 num_images = np.amin( [x_test.shape[0],y_test.shape[0]] )
@@ -163,12 +159,7 @@ print(" ")
 print("                                        Model Prediction Test")
 print("*---------------------------------------------------------------------------------------------------*")
 
-predictions = model.predict( x_test )
-
-print(" ")
-print("      Prediction    Actual")
-print("      ----------    ------")
-for n in range( x_test.shape[0] ):
-    print("         %1d          %1d" %(np.argmax(predictions[n,:]), np.argmax(y_test[n,:])))
-print(" ")
+filename = "predictions_" + args.variable + "_"+ str(args.levels) + "hPa.npy"
+predictions = np.argmax( model.predict( x_test ), axis=1 )
+np.save( filename, predictions )
 
