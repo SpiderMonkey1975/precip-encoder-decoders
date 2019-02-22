@@ -4,7 +4,7 @@
 
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --partition=gpuq
 #SBATCH --job-name=ERA5_Classifier
 #SBATCH --account=director2107
@@ -17,7 +17,7 @@ CONTAINER=tensorflow/tensorflow:1.12.0-gpu-py3
 
 # Set values to the configurable hyperparameters in the ML script
 
-EPOCHS=100
+EPOCHS=1000
 BATCH_SIZE=250
 LEARN_RATE=0.00001
 VARIABLE=rh

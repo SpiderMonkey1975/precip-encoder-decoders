@@ -13,7 +13,7 @@ from neural_nets import classifier
 print(" ")
 print(" ")
 print("*===================================================================================================*")
-print("*                                         RAINFALL CLASSIFIER                                       *")
+print("*                                EVALUATION OF RAINFALL CLASSIFIER                                  *")
 print("*===================================================================================================*")
 
 ##
@@ -21,12 +21,33 @@ print("*========================================================================
 ##
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-w', '--weights_file', type=str, help="name of the file containing initial weights")
-parser.add_argument('-f', '--features_file', type=str, help="name of the file containing feature data")
+parser.add_argument('-v', '--variable', type=str, default="rh", help="prognostic variable to be used in test. Valid options: rh, t, z, all")
+parser.add_argument('-l', '--level', type=str, default="800", help="pressure level to be used in test. Valid options: 500, 800, 1000, all")
 parser.add_argument('-b', '--batch_size', type=int, default=250, help="set batch size per GPU")
-parser.add_argument('-l', '--levels', type=int, default=800, help="set pressure level to be used")
-parser.add_argument('-c', '--channels', type=int, default=3, help="set number of channels")
+parser.add_argument('-c', '--num_classes', type=int, default=6, help="set number of classes for the image classification")
 args = parser.parse_args()
+
+if args.level == "all" and args.variable=="all":
+   print("ERROR: cannot have 3 variable output from all pressure levels")
+   sys.exit(0)
+
+num_channels = 1
+if args.level == "all" or args.variable=="all":
+   num_channels = 3
+
+if args.variable != "all":
+   var = args.variable
+   var2 = args.variable + "_"
+else:
+   var = "3vars"
+   var2 = "" 
+
+if args.level != "all":
+   lev = args.level + "hPa"
+   lev_dir = args.level + "hPa/"
+else:
+   lev = "all_levels" 
+   lev_dir = ""
 
 ##
 ## Set some important parameters
@@ -36,7 +57,6 @@ image_width = 240
 image_height = 360
 
 num_nodes = 50
-bins = 6
 dropout = 0.3
 layers = 3
 learn_rate = 0.0001
@@ -44,18 +64,19 @@ learn_rate = 0.0001
 print(" ")
 print(" ")
 print("       Model Settings:")
-print("         * using ERA5-Australia specific input over %d bins" % (bins))
+print("         * using ERA5-Australia specific input over %d bins" % (args.num_classes))
 print("         * a batch size of %2d images per GPU will be employed" % (args.batch_size))
 print("         * the ADAM optimizer with a learning rate of %6.4f will be used" % (learn_rate))
 print("         * dropout ratio is %f" % (dropout))
 print("         * using 3-layer classifier with %d, %d and %d numbers of hidden nodes" % (8*num_nodes,4*num_nodes,num_nodes))
+print(" ")
 
 ##
 ## Construct the neural network 
 ##
 
-input_layer = Input(shape = (image_width, image_height, args.channels))
-net = classifier( input_layer, int(num_nodes), int(bins), 0.3, args.channels )
+input_layer = Input(shape = (image_width, image_height, num_channels))
+net = classifier( input_layer, int(num_nodes), args.num_classes, float(dropout), 3 )
 
 model = models.Model(inputs=input_layer, outputs=net)
 
@@ -63,7 +84,9 @@ model = models.Model(inputs=input_layer, outputs=net)
 ## Load weights
 ##
 
-model.load_weights( args.weights_file )
+filename = "../model_backups/" + str(args.num_classes) + "bins/model_weights_" + var + "_" + lev + ".h5"
+print("       Weights File: %s" % (filename))
+model.load_weights( filename )
 
 ##
 ## Set the appropriate optimizer and loss function 
@@ -76,9 +99,14 @@ model.compile( loss='categorical_crossentropy', optimizer=opt, metrics=['accurac
 ## Load the test input data from disk
 ##
 
-x_test = np.load( args.features_file )
+filename = "../input_data/test/" + lev_dir + var2 + "era5_au_" + str(args.num_classes) + "bins.npy"
+print("       Features File: %s" % (filename))
+x_test = np.load( filename )
+if num_channels==1:
+   x_test = np.expand_dims( x_test, axis=3 )
 
-filename = "../input_data/test/au_labels_" + str(bins) + "bins.npy"
+filename = "../input_data/test/au_labels_" + str(args.num_classes) + "bins.npy"
+print("       Labels File: %s" % (filename))
 y_test = np.load( filename )
 
 num_images = np.amin( [x_test.shape[0],y_test.shape[0]] )
@@ -98,12 +126,12 @@ print("                                        Model Evaluation")
 print("*---------------------------------------------------------------------------------------------------*")
 print(" ")
 print("    Overall Accuracy: %4.3f" % (score[1]))
-print("          Error Rate: %4.3f" % (1.0-score[1]))
 
 actual = np.argmax( y_test, axis=1 )
 predicted = np.argmax( model.predict( x_test ), axis=1 )
 
 true_bin_counts = np.bincount( actual )
+print( true_bin_counts, np.sum(true_bin_counts) )
 
 tmp = np.argmax( np.bincount( predicted ))
 cnt = 0
@@ -114,12 +142,13 @@ print("      Null Error Rate: %4.3f" % (cnt/len(actual)))
 print(" ")
 
 
-for n in range(bins):
+for n in range(args.num_classes):
     print("   Bin %d Statistics " % (n))
    
     true_pos_cnt = 0 
     false_pos_cnt = 0 
     true_neg_cnt = 0
+    false_neg_cnt = 0
 
     for i in range( len(actual) ):
         if actual[i]==n and predicted[i]==n:
@@ -128,13 +157,15 @@ for n in range(bins):
            false_pos_cnt = false_pos_cnt + 1
         elif actual[i]!=n and predicted[i]!=n:
            true_neg_cnt = true_neg_cnt + 1
+        elif actual[i]==n and predicted[i]!=n:
+           false_neg_cnt = false_neg_cnt + 1
 
+    print( len(actual), true_bin_counts[n] )
     print("                  accuracy: %4.3f" % ((true_pos_cnt+true_neg_cnt)/len(actual)))
-    print("                error rate: %4.3f" % (1.0-(true_pos_cnt+true_neg_cnt)/len(actual)))
     print("        true positive rate: %4.3f" % (true_pos_cnt/true_bin_counts[n]))
     print("       false positive rate: %4.3f" % (false_pos_cnt/(len(actual)-true_bin_counts[n])))
-    print("        true negative rate: %4.3f" % (1.0 - false_pos_cnt/(len(actual)-true_bin_counts[n])))
-    print("      classifier precision: %4.3f" % (true_pos_cnt/(true_pos_cnt+false_pos_cnt)))
-    print("                prevalance: %4.3f" % (true_bin_counts[n]/len(actual)))
+    print("        true negative rate: %4.3f" % (true_neg_cnt/(len(actual)-true_bin_counts[n])))
+    print("       false negative rate: %4.3f" % (false_neg_cnt/(len(actual)-true_bin_counts[n])))
+    print("     prevalance of Bin %d : %4.3f" % (n,true_bin_counts[n]/len(actual)))
     print(" ")
 

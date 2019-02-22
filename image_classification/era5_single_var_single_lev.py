@@ -4,12 +4,12 @@ import sys, argparse
 
 from datetime import datetime
 
-from neural_nets import classifier
+from neural_nets import classifier, unet_1_layer
 
 from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers, callbacks
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 
 print(" ")
 print(" ")
@@ -55,7 +55,10 @@ image_height = 360
 ##
 
 input_layer = layers.Input(shape = (image_width, image_height, 1))
-net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.layers )
+if args.layers>0:
+   net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.layers )
+else:
+   net = unet_1_layer( input_layer, int(16), args.bins, args.num_nodes )
 
 model = models.Model(inputs=input_layer, outputs=net)
 
@@ -91,9 +94,14 @@ print(" ")
 print("                                       Model Training Output")
 print("*---------------------------------------------------------------------------------------------------*")
 
-filename = "../model_backups/model_weights_" + args.variable + "_" + str(args.levels) + "hPa.h5"
+filename = "../model_backups/" + str(args.bins) + "bins/model_weights_" + args.variable + "_" + str(args.levels) + "hPa.h5"
 checkpoint = ModelCheckpoint( filename, monitor='val_acc', verbose=0, save_best_only=True, mode='max' )
-my_callbacks = [checkpoint]
+
+earlystop = EarlyStopping( min_delta=0.00001,
+                           patience=10,
+                           mode='min' )
+
+my_callbacks = [checkpoint, earlystop]
 
 t1 = datetime.now()
 history = model.fit( x=x_train, y=y_train, 

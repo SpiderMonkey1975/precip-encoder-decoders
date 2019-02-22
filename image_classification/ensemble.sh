@@ -1,7 +1,8 @@
 #!/bin/bash
 
-variables=('z' 't' 'rh')
+variables=('rh' 'z' 't')
 levels=('500' '800' '1000')
+num_bins=4
 
 cnt=0
 input_file="../jobscripts/run_era5_classifier"
@@ -16,6 +17,9 @@ do
         fi
    
         while read LINE; do
+              if echo $LINE | grep -q "NUM_BINS="; then
+                 LINE="NUM_BINS=$num_bins" 
+              fi
               if echo $LINE | grep -q "PRESSURE_LEVEL="; then
                  LINE="PRESSURE_LEVEL=$lev" 
               fi
@@ -40,6 +44,9 @@ do
         fi
 
         while read LINE; do
+              if echo $LINE | grep -q "NUM_BINS="; then
+                 LINE="NUM_BINS=$num_bins" 
+              fi
               if echo $LINE | grep -q "VARIABLE="; then
                  LINE="VARIABLE=$var"
               fi
@@ -60,6 +67,9 @@ do
         fi
 
         while read LINE; do
+              if echo $LINE | grep -q "NUM_BINS="; then
+                 LINE="NUM_BINS=$num_bins" 
+              fi
               if echo $LINE | grep -q "PRESSURE_LEVEL="; then
                  LINE="PRESSURE_LEVEL=$lev"
               fi

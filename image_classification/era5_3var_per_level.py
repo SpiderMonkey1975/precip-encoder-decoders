@@ -7,10 +7,10 @@ from datetime import datetime
 from tensorflow.keras import backend as K
 from tensorflow.keras import models, layers, callbacks
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 
 import neural_nets
-from neural_nets import classifier
+from neural_nets import classifier, unet_1_layer
 
 
 print(" ")
@@ -57,7 +57,10 @@ num_channels = 3
 ##
 
 input_layer = layers.Input(shape = (image_width, image_height, num_channels))
-net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.layers )
+if args.layers>0:
+   net = classifier( input_layer, args.num_nodes, args.bins, args.dropout, args.layers )
+else:
+   net = unet_1_layer( input_layer, int(32), args.bins )
 
 model = models.Model(inputs=input_layer, outputs=net)
 
@@ -86,6 +89,22 @@ x_train = x_train[ :num_images, :image_width, :image_height, : ]
 y_train = y_train[ :num_images, : ]
 
 ##
+## Define two callbacks to be applied during the model training
+##
+
+filename = "../model_backups/" + str(args.bins) + "bins/model_weights_3vars_" + str(args.levels) + "hPa.h5"
+checkpoint = ModelCheckpoint( filename, 
+                              monitor='val_acc', 
+                              save_best_only=True, 
+                              mode='max' )
+
+earlystop = EarlyStopping( min_delta=0.00001,
+                           patience=10,
+                           mode='min' )
+
+my_callbacks = [checkpoint, earlystop]
+
+##
 ## Train model.  Only output information for the validation steps only.
 ##
 
@@ -93,10 +112,6 @@ print(" ")
 print(" ")
 print("                                       Model Training Output")
 print("*---------------------------------------------------------------------------------------------------*")
-
-filename = "../model_backups/model_weights_3vars_" + str(args.levels) + "hPa.h5"
-checkpoint = ModelCheckpoint( filename, monitor='val_acc', verbose=0, save_best_only=True, mode='max' )
-my_callbacks = [checkpoint]
 
 t1 = datetime.now()
 history = model.fit( x=x_train, y=y_train, 

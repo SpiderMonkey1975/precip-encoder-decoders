@@ -1,5 +1,6 @@
 
-from tensorflow.keras.layers import Dropout, Dense, Flatten
+from tensorflow.keras.layers import Dropout, Dense, Flatten, BatchNormalization, Conv2D, Conv2DTranspose
+from tensorflow.keras.layers import MaxPooling2D, UpSampling2D, concatenate
 
 ##
 ## classifier
@@ -30,3 +31,27 @@ def classifier( input_layer, num_nodes, num_bins, dropout_ratio, num_layers ):
         if factor<1:
            factor = 1
     return Dense( num_bins, activation='softmax' )(net)
+
+def unet_1_layer( input_layer, num_filters, num_classes, num_nodes ):
+
+    # construct the contracting path
+
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(input_layer)
+    cnv1 = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = MaxPooling2D( 2 )(cnv1)
+#    net = BatchNormalization(axis=3)( net )
+
+    net = Conv2D( 2*num_filters, 3, activation='relu', padding='same' )(net)
+
+    # construct the expansive path
+
+    net = UpSampling2D( 2 )(net)
+    net = concatenate( [net,cnv1], axis=3 )
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+    net = Conv2D( num_filters, 3, activation='relu', padding='same' )(net)
+#    net = BatchNormalization(axis=3)( net )
+
+    net = Conv2D( 4, 1, activation='relu', padding='same' )(net)
+
+    # add a multi-layer perceptron section for the image classification implementation
+    return classifier( net, num_nodes, num_classes, 0.3, 3 )
