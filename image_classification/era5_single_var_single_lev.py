@@ -73,11 +73,11 @@ model.compile( loss='categorical_crossentropy', optimizer=opt, metrics=['accurac
 ## Load the training input data from disk
 ##
 
-inputfile = "../input_data/training/" + str(args.levels) + "hPa/" + args.variable + "_era5_au_" + str(args.bins) + "bins.npy"
+inputfile = "../input/au/training/" + str(args.levels) + "hPa/" + args.variable + "_normalized.npy"
 x_train = np.load( inputfile )
 x_train = np.expand_dims( x_train, axis=3 )
 
-inputfile = "../input_data/training/au_labels_" + str(args.bins) + "bins.npy"
+inputfile = "../input/au/training/labels_" + str(args.bins) + "bins.npy"
 y_train = np.load( inputfile )
 
 num_images = np.amin( [x_train.shape[0],y_train.shape[0]] )

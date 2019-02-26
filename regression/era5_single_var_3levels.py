@@ -26,17 +26,16 @@ print("*========================================================================
 parser = argparse.ArgumentParser()
 parser.add_argument('-e', '--epochs', type=int, default=250, help="maximum number of epochs")
 parser.add_argument('-b', '--batch_size', type=int, default=250, help="set batch size per GPU")
-parser.add_argument('-l', '--levels', type=str, default="800", help="atmospheric pressure level used for input data. Valid values are 500, 800 and 1000")
+parser.add_argument('-v', '--variable', type=str, default="rh", help="prognostic variable used for training. Valid values are z, t and rh")
 args = parser.parse_args()
 
 print(" ")
 print(" ")
 print("       Model Settings:")
-print("         * using ERA5-Australia specific input at the %s hPa level" % (args.levels))
+print("         * using ERA5-Australia specific %s input at the 500, 800 and 1000 hPa levels" % (args.variable))
 print("         * model will run for a maximum of %2d epochs" % (args.epochs))
 print("         * a batch size of %2d images per GPU will be employed" % (args.batch_size))
 print("         * the ADAM optimizer with a learning rate of 0.0001 will be used")
-print("         * dropout ratio is 0.3")
 
 ##
 ## Set dimensions of input data 
@@ -71,8 +70,9 @@ model.compile( loss='mae', optimizer=opt, metrics=['mae'] )
 ## Load the training input data from disk
 ##
 
-filename = "../input/au/training/" + args.levels + "hPa/3var_not_normalized.npy"
+filename = "../input/au/training/all_levels/" + args.variable + "_not_normalized.npy"
 x_train = np.load( filename )
+x_train = x_train[ :, :image_width, :image_height, : ]
 
 filename = "../input/au/training/tp.npy"
 y_train = np.expand_dims( np.load(filename), axis=3 )
@@ -83,7 +83,7 @@ y_train = y_train[ :, :image_width, :image_height ]
 ## Define two callbacks to be applied during the model training
 ##
 
-filename = "../model_backups/model_weights_3vars_" + str(args.levels) + "hPa_regression.h5"
+filename = "../model_backups/model_weights_" + args.variable + "_3levels_regression.h5"
 checkpoint = ModelCheckpoint( filename, 
                               monitor='val_loss', 
                               save_best_only=True, 

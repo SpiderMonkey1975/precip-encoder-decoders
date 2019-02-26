@@ -21,33 +21,24 @@ print("*========================================================================
 ##
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-v', '--variable', type=str, default="rh", help="prognostic variable to be used in test. Valid options: rh, t, z, all")
-parser.add_argument('-l', '--level', type=str, default="800", help="pressure level to be used in test. Valid options: 500, 800, 1000, all")
+parser.add_argument('-v', '--variable', type=str, default="rh", help="prognostic variable to be used in test. Valid options: rh, t, z, 3var")
+parser.add_argument('-l', '--level', type=str, default="800", help="pressure level to be used in test. Valid options: 500, 800, 1000, all_levels")
 parser.add_argument('-b', '--batch_size', type=int, default=250, help="set batch size per GPU")
 parser.add_argument('-c', '--num_classes', type=int, default=6, help="set number of classes for the image classification")
 args = parser.parse_args()
 
-if args.level == "all" and args.variable=="all":
+if args.level == "all_levels" and args.variable=="3var":
    print("ERROR: cannot have 3 variable output from all pressure levels")
    sys.exit(0)
 
 num_channels = 1
-if args.level == "all" or args.variable=="all":
+if args.level == "all_levels" or args.variable=="3var":
    num_channels = 3
 
-if args.variable != "all":
-   var = args.variable
-   var2 = args.variable + "_"
-else:
-   var = "3vars"
-   var2 = "" 
-
-if args.level != "all":
-   lev = args.level + "hPa"
+if args.level != "all_levels":
    lev_dir = args.level + "hPa/"
 else:
-   lev = "all_levels" 
-   lev_dir = ""
+   lev_dir = "all_levels"
 
 ##
 ## Set some important parameters
@@ -99,13 +90,13 @@ model.compile( loss='categorical_crossentropy', optimizer=opt, metrics=['accurac
 ## Load the test input data from disk
 ##
 
-filename = "../input_data/test/" + lev_dir + var2 + "era5_au_" + str(args.num_classes) + "bins.npy"
+filename = "../input/test/au/" + lev_dir + args.variable + "_normalized.npy"
 print("       Features File: %s" % (filename))
 x_test = np.load( filename )
 if num_channels==1:
    x_test = np.expand_dims( x_test, axis=3 )
 
-filename = "../input_data/test/au_labels_" + str(args.num_classes) + "bins.npy"
+filename = "../input/au/test/labels_" + str(args.num_classes) + "bins.npy"
 print("       Labels File: %s" % (filename))
 y_test = np.load( filename )
 

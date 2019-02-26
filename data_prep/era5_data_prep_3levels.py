@@ -14,7 +14,7 @@ print(" ")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data', type=str, default='au', help="dataset type: native, au")
-parser.add_argument('-n', '--num_bins', type=int, default=4, help="number of rainfall classification bins")
+parser.add_argument('-n', '--num_bins', type=int, default=6, help="number of rainfall classification bins")
 args = parser.parse_args()
 
 if args.data != "au" and args.data != "native":
@@ -110,15 +110,21 @@ print("           -> indicies selected")
 ## Output label data to hard disk
 ##
 
-varname = args.data + "_labels_" + str(args.num_bins) + "bins.npy"       
-filename = "../input_data/training/" + varname
+filename = "../input/" + args.data + "/training/labels_" + str(args.num_bins) + "bins.npy"
 train_set = one_hot_encoding[ training_indicies,: ]
 np.save( filename, train_set )
 
-filename = "../input_data/test/" + varname
+filename = "../input/" + args.data + "/test/labels_" + str(args.num_bins) + "bins.npy"
 test_set = one_hot_encoding[ test_indicies,: ]
 np.save( filename, test_set )
-print("           -> label data written to hard disk")
+print("           -> labels for image classification approach written to hard disk")
+
+filename = "../input/" + args.data + "/training/tp.npy"
+np.save( filename, precip_data[ training_indicies,:,: ] )
+
+filename = "../input/" + args.data + "/test/tp.npy"
+np.save( filename, precip_data[ test_indicies,:,: ] )
+print("           -> labels for regression approach written to hard disk")
 print(" ")
 print(" ")
 
@@ -127,6 +133,9 @@ print(" ")
 ##
 
 print("      [2/2] processing features data")
+
+train_dir = "../input/" + args.data + "/training/all_levels/" 
+test_dir = "../input/" + args.data + "/test/all_levels/" 
 
 cnt = 0
 for var in variables:
@@ -138,6 +147,17 @@ for var in variables:
    features_data = np.moveaxis(features_data, 1, 3)
    print("              * axis swap performed")
 
+##
+## Output features data to hard disk for regression approach
+##
+
+   filename = train_dir + var + "_not_normalized.npy" 
+   np.save( filename, features_data[ training_indicies,:,:,: ] )
+
+   filename = test_dir + var + "_not_normalized.npy" 
+   np.save( filename, features_data[ test_indicies,:,:,: ] )
+   print("              * features data for regression approach written to hard disk")
+
    for i in range( len(levels) ):
        for n in range( features_data.shape[0] ):
            mean_val = np.mean( features_data[n,:,:,i] )
@@ -147,14 +167,14 @@ for var in variables:
    cnt = cnt + 1
 
 ##
-## Output processed features data to hard disk
+## Output processed features data to hard disk for image classification approach
 ##
 
-   filename = "../input_data/training/" + var + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy" 
+   filename = train_dir + var + "_normalized.npy" 
    np.save( filename, features_data[ training_indicies,:,:,: ] )
 
-   filename = "../input_data/test/" + var + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy" 
+   filename = test_dir + var + "_normalized.npy" 
    np.save( filename, features_data[ test_indicies,:,:,: ] )
-   print("              * features data written to hard disk")
+   print("              * features data for image classification approach written to hard disk")
    print(" ")
 print(" ")

@@ -14,16 +14,10 @@ print(" ")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--data', type=str, default='au', help="dataset type: native, au")
-parser.add_argument('-n', '--num_bins', type=int, default=4, help="number of rainfall classification bins")
 args = parser.parse_args()
 
 if args.data != "au" and args.data != "native":
    args.data = "au"
-
-if args.num_bins<2:
-   args.num_bins = 2
-elif args.num_bins>6:
-   args.num_bins = 6
 
 ##
 ## Set some important parameters
@@ -42,31 +36,38 @@ if args.data == "native":
 else:
    variables = ['z','t','rh']
    varnames = ['atmospheric pressure','atmospheric temperature','relative humidity']
-   print("      splitting ERA5 Australia-specific data into %d bins" % (args.num_bins))
 print(" ")
+
+approach_str = ['image classification', 'regression']
+my_str = ['', '_not']
 
 ##
 ## Split variable data between the 3 different pressure levels
 ##
 
-for i in range( len(variables) ):
-   print("      splitting %s among pressure levels" % (varnames[i]))
-   filename = "../input_data/training/" + variables[i] + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy" 
-   features_data = np.load( filename )
-   print("              * data read from hard disk")
+for j in range( len(approach_str) ):
+    print("      preparing data for %s approach" % (approach_str[j]))
+    for i in range( len(variables) ):
+        var_str = variables[i] + my_str[j] + "_normalized.npy"
 
-   for n in range( len(levels) ):
-       filename = "../input_data/training/" + str(levels[n]) + "hPa/"  + variables[i] + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy" 
-       np.save( filename, features_data[ :,:,:,n ] )
-   print("              * features data written to hard disk")
+        print("      splitting %s among pressure levels" % (varnames[i]))
+        filename = "../input/" + args.data + "/training/all_levels/" + var_str 
+        features_data = np.load( filename )
+        print("              * data read from hard disk")
 
-   filename = "../input_data/test/" + variables[i] + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy" 
-   features_data = np.load( filename )
-   print("              * data read from hard disk")
+        for n in range( len(levels) ):
+            filename = "../input/" + args.data + "/training/" + str(levels[n]) + "hPa/" + var_str  
+            np.save( filename, features_data[ :,:,:,n ] )
+        print("              * features data written to hard disk")
 
-   for n in range( len(levels) ):
-       filename = "../input_data/test/" + str(levels[n]) + "hPa/"  + variables[i] + "_era5_" + args.data + "_" + str(args.num_bins) + "bins.npy" 
-       np.save( filename, features_data[ :,:,:,n ] )
-   print("              * features data written to hard disk")
-   print(" ")
-print(" ")
+        filename = "../input/" + args.data + "/test/all_levels/" + var_str 
+        features_data = np.load( filename )
+        print("              * data read from hard disk")
+
+        for n in range( len(levels) ):
+            filename = "../input/" + args.data + "/test/" + str(levels[n]) + "hPa/" + var_str 
+            np.save( filename, features_data[ :,:,:,n ] )
+        print("              * features data written to hard disk")
+        print(" ")
+    print(" ")
+
